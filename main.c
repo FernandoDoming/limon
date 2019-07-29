@@ -12,6 +12,8 @@
 static FileMonitor fm = { 0 };
 static bool firstnode = true;
 static bool colorful = true;
+static char* outputfpath = NULL;
+static FILE* outfd = NULL;
 
 FileMonitorBackend *backends[] = {
 #if __APPLE__
@@ -89,46 +91,46 @@ static bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 			firstnode = true;
 		}
 		char *filename = fmu_jsonfilter (ev->file);
-		printf ("%s{\"filename\":\"%s\",\"pid\":%d,"
+		fprintf (outfd, "%s{\"filename\":\"%s\",\"pid\":%d,"
 			"\"uid\":%d,\"gid\":%d,", 
 			(fm->jsonStream || firstnode)? "":",", filename, ev->pid, ev->uid, ev->gid);
 		firstnode = false;
 		free (filename);
 		if (ev->inode) {
-			printf ("\"inode\":%d,", ev->inode);
+			fprintf (outfd, "\"inode\":%d,", ev->inode);
 		}
 		if (ev->tstamp) {
-			printf ("\"timestamp\":%" PRId64 ",", ev->tstamp);
+			fprintf (outfd, "\"timestamp\":%" PRId64 ",", ev->tstamp);
 		}
 		if (ev->inode) {
-			printf ("\"dev\":{\"major\":%d,\"minor\":%d},",
+			fprintf (outfd, "\"dev\":{\"major\":%d,\"minor\":%d},",
 				ev->dev_major, ev->dev_minor);
 		}
 		if (ev->mode) {
-			printf ("\"mode\":%d,", ev->mode);
+			fprintf (outfd, "\"mode\":%d,", ev->mode);
 		}
 		if (ev->ppid) {
-			printf ("\"ppid\":%d,", ev->ppid);
+			fprintf (outfd, "\"ppid\":%d,", ev->ppid);
 		}
 		if (ev->proc && *ev->proc) {
 			char *proc = fmu_jsonfilter (ev->proc);
-			printf ("\"proc\":\"%s\",", proc);
+			fprintf (outfd, "\"proc\":\"%s\",", proc);
 			free (proc);
 		}
 		if (ev->event && *ev->event) {
 			char *event = fmu_jsonfilter (ev->event);
-			printf ("\"event\":\"%s\",", event);
+			fprintf (outfd, "\"event\":\"%s\",", event);
 			free (event);
 		}
 		if (ev->newfile && *ev->newfile) {
 			char *filename = fmu_jsonfilter (ev->newfile);
-			printf ("\"newfile\":\"%s\",", filename);
+			fprintf (outfd, "\"newfile\":\"%s\",", filename);
 			free (filename);
 		}
-		printf ("\"type\":\"%s\"}", fm_typestr (ev->type));
+		fprintf (outfd, "\"type\":\"%s\"}", fm_typestr (ev->type));
 		if (fm->jsonStream) {
-			printf ("\n");
-			fflush (stdout);
+			fprintf (outfd, "\n");
+			fflush (outfd);
 		}
 	} else {
 		if (fm->fileonly && ev->file) {
@@ -143,12 +145,12 @@ static bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 		const char *color_end = colorful? Color_RESET: "";
 		// TODO . show event type
 		if (ev->type == FSE_RENAME) {
-			printf ("%s%s%s\t%d\t\"%s%s%s\"\t%s -> %s\n",
+			fprintf (outfd, "%s%s%s\t%d\t\"%s%s%s\"\t%s -> %s\n",
 				color_begin, fm_typestr(ev->type), color_end,
 				ev->pid, color_begin2, ev->proc? ev->proc: "", color_end, ev->file,
 				ev->newfile);
 		} else {
-			printf ("%s%s%s\t%d\t\"%s%s%s\"\t%s\n",
+			fprintf (outfd, "%s%s%s\t%d\t\"%s%s%s\"\t%s\n",
 				color_begin, fm_typestr(ev->type), color_end,
 				ev->pid, color_begin2, ev->proc? ev->proc: "", color_end, ev->file);
 		}
@@ -193,6 +195,7 @@ static void help (const char *argv0) {
 		" -h                show this help\n"
 		" -j                output in JSON format\n"
 		" -J                output in JSON stream format\n"
+		" -o [path]         write output to file\n"
 		" -n                do not use colors\n"
 		" -L                list all filemonitor backends\n"
 		" -e [path/to/bin]  execute and monitor this binary\n"
@@ -236,7 +239,7 @@ int main (int argc, char **argv) {
 	fm.backend = fmb_inotify;
 #endif
 
-	while ((c = getopt (argc, argv, "a:chb:B:d:fjJLne:p:P:v")) != -1) {
+	while ((c = getopt (argc, argv, "a:chb:B:d:fjJo:Lne:p:P:v")) != -1) {
 		switch (c) {
 		case 'a':
 			fm.alarm = atoi (optarg);
@@ -266,6 +269,17 @@ int main (int argc, char **argv) {
 		case 'J':
 			fm.jsonStream = true;
 			break;
+		case 'o':
+		{
+			size_t pathlen = strnlen(optarg, FILENAME_MAX) + 1;
+			outputfpath = malloc(pathlen * sizeof(char));
+			if (!outputfpath) {
+				eprintf("FATAL Could not allocate fname buffer!");
+				exit(1);
+			}
+			strncpy(outputfpath, optarg, pathlen);
+			break;
+		}
 		case 'L':
 			list_backends ();
 			return 0;
@@ -297,6 +311,7 @@ int main (int argc, char **argv) {
 			return 0;
 		}
 	}
+
 	if (optind < argc) {
 		fm.root = argv[optind];
 	}
@@ -304,19 +319,36 @@ int main (int argc, char **argv) {
 		eprintf ("-c requires -p or -e\n");
 		return 1;
 	}
-	if (fm.json && !fm.jsonStream) {
-		printf ("[");
+
+	// Open a descriptor to the desired output
+	if (outputfpath) {
+		outfd = fopen(outputfpath, "a");
 	}
+	else {
+		outfd = stdout;
+	}
+
+	if (fm.json && !fm.jsonStream) {
+		fprintf (outfd, "[");
+	}
+
+	// Start processing FS events
 	if (fm.backend.begin (&fm)) {
 		(void)setup_signals ();
 		fm.backend.loop (&fm, callback);
 	} else {
 		ret = 1;
 	}
+
+	// Processing finished => clean-up
 	if (fm.json && !fm.jsonStream) {
-		printf ("]\n");
+		fprintf (outfd, "]\n");
 	}
-	fflush (stdout);
-	fm.backend.end (&fm);
+
+	fflush(outfd);
+	fclose(outfd);
+	fm.backend.end(&fm);
+	if (outputfpath) free(outputfpath);
+
 	return ret;
 }

@@ -14,6 +14,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <sys/wait.h>
 #include "fsmon.h"
 
 /* available on 2.6.37 and android-21 */
@@ -163,6 +164,14 @@ static bool fm_loop (FileMonitor *fm, FileMonitorCallback cb) {
 				goto fail;
 			}
 			metadata = FAN_EVENT_NEXT (metadata, len);
+
+			if (fm->autoexit) {
+				int status;
+    			if (waitpid(-1, &status, WNOHANG) > 0) {
+					// Child has exited
+					fm->running = false;
+				}
+			}
 		}
 		while (select (fan_fd + 1, &rfds, NULL, NULL, NULL) < 0) {
 			if (errno != EINTR || !fm->running) {
@@ -170,6 +179,7 @@ static bool fm_loop (FileMonitor *fm, FileMonitorCallback cb) {
 			}
 		}
 	}
+
 	if (len < 0) {
 		goto fail;
 	}

@@ -201,6 +201,7 @@ static void help (const char *argv0) {
 		" -e [path/to/bin]  execute and monitor this binary\n"
 		" -p [pid]          only show events from this pid\n"
 		" -P [proc]         events only from process name\n"
+		" -s                exit when the monitored process (-p or -e) exits\n"
 		" -v                show version\n"
 		" [path]            only get events from this path\n"
 		, argv0);
@@ -239,7 +240,7 @@ int main (int argc, char **argv) {
 	fm.backend = fmb_inotify;
 #endif
 
-	while ((c = getopt (argc, argv, "a:chb:B:d:fjJo:Lne:p:P:v")) != -1) {
+	while ((c = getopt (argc, argv, "a:cshb:B:d:fjJo:Lne:p:P:v")) != -1) {
 		switch (c) {
 		case 'a':
 			fm.alarm = atoi (optarg);
@@ -256,6 +257,9 @@ int main (int argc, char **argv) {
 			break;
 		case 'c':
 			fm.child = true;
+			break;
+		case 's':
+			fm.autoexit = true;
 			break;
 		case 'h':
 			help (argv[0]);
@@ -317,6 +321,10 @@ int main (int argc, char **argv) {
 	}
 	if (fm.child && !fm.pid) {
 		eprintf ("-c requires -p or -e\n");
+		return 1;
+	}
+	if (fm.autoexit && !fm.pid) {
+		eprintf ("-s requires -p or -e\n");
 		return 1;
 	}
 

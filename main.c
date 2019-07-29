@@ -144,12 +144,12 @@ static bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 		// TODO . show event type
 		if (ev->type == FSE_RENAME) {
 			printf ("%s%s%s\t%d\t\"%s%s%s\"\t%s -> %s\n",
-				color_begin, fm_typestr (ev->type), color_end,
+				color_begin, fm_typestr(ev->type), color_end,
 				ev->pid, color_begin2, ev->proc? ev->proc: "", color_end, ev->file,
 				ev->newfile);
 		} else {
 			printf ("%s%s%s\t%d\t\"%s%s%s\"\t%s\n",
-				color_begin, fm_typestr (ev->type), color_end,
+				color_begin, fm_typestr(ev->type), color_end,
 				ev->pid, color_begin2, ev->proc? ev->proc: "", color_end, ev->file);
 		}
 	}
@@ -185,20 +185,21 @@ static bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 
 static void help (const char *argv0) {
 	eprintf ("Usage: %s [-Jjc] [-a sec] [-b dir] [-B name] [-p pid] [-P proc] [path]\n"
-		" -a [sec]  stop monitoring after N seconds (alarm)\n"
-		" -b [dir]  backup files to DIR folder (EXPERIMENTAL)\n"
-		" -B [name] specify an alternative backend\n"
-		" -c        follow children of -p PID\n"
-		" -f        show only filename (no path)\n"
-		" -h        show this help\n"
-		" -j        output in JSON format\n"
-		" -J        output in JSON stream format\n"
-		" -n        do not use colors\n"
-		" -L        list all filemonitor backends\n"
-		" -p [pid]  only show events from this pid\n"
-		" -P [proc] events only from process name\n"
-		" -v        show version\n"
-		" [path]    only get events from this path\n"
+		" -a [sec]          stop monitoring after N seconds (alarm)\n"
+		" -b [dir]          backup files to DIR folder (EXPERIMENTAL)\n"
+		" -B [name]         specify an alternative backend\n"
+		" -c                follow children of -p PID or -e bin\n"
+		" -f                show only filename (no path)\n"
+		" -h                show this help\n"
+		" -j                output in JSON format\n"
+		" -J                output in JSON stream format\n"
+		" -n                do not use colors\n"
+		" -L                list all filemonitor backends\n"
+		" -e [path/to/bin]  execute and monitor this binary\n"
+		" -p [pid]          only show events from this pid\n"
+		" -P [proc]         events only from process name\n"
+		" -v                show version\n"
+		" [path]            only get events from this path\n"
 		, argv0);
 }
 
@@ -220,6 +221,13 @@ static void list_backends() {
 	}
 }
 
+static void swap_process(char* cmd) {
+	if (execl(cmd, cmd, NULL) == -1) {
+		eprintf("FATAL ERROR trying to spawn %s\n", cmd);
+		exit(1);
+	}
+}
+
 int main (int argc, char **argv) {
 	int c, ret = 0;
 #if __APPLE__
@@ -228,7 +236,7 @@ int main (int argc, char **argv) {
 	fm.backend = fmb_inotify;
 #endif
 
-	while ((c = getopt (argc, argv, "a:chb:B:d:fjJLnp:P:v")) != -1) {
+	while ((c = getopt (argc, argv, "a:chb:B:d:fjJLne:p:P:v")) != -1) {
 		switch (c) {
 		case 'a':
 			fm.alarm = atoi (optarg);
@@ -264,6 +272,20 @@ int main (int argc, char **argv) {
 		case 'n':
 			colorful = false;
 			break;
+		case 'e':
+		{
+			pid_t child_pid = fork();
+
+			if (child_pid == 0) {
+				// Child process
+				swap_process(optarg);
+			}
+			else {
+				fm.pid = (int) child_pid;
+			}
+
+			break;
+		}
 		case 'p':
 			fm.pid = atoi (optarg);
 			break;
@@ -279,7 +301,7 @@ int main (int argc, char **argv) {
 		fm.root = argv[optind];
 	}
 	if (fm.child && !fm.pid) {
-		eprintf ("-c requires -p\n");
+		eprintf ("-c requires -p or -e\n");
 		return 1;
 	}
 	if (fm.json && !fm.jsonStream) {

@@ -7,7 +7,9 @@
 #include <getopt.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <pthread.h>
 #include "fsmon.h"
+#include "trace/trace.h"
 
 static FileMonitor fm = { 0 };
 static bool firstnode = true;
@@ -42,10 +44,11 @@ static bool setup_signals() {
 		.sa_handler = control_c
 	};
 	if (sigaction (SIGINT, &int_handler, 0) == -1) {
-		eprintf ("Cannot setup the SIGINT handler\n");
+		eprintf("Cannot setup the SIGINT handler\n");
 		res = false;
 	}
 	fm.running = true;
+
 	if (fm.alarm) {
 		if (sigaction (SIGALRM, &int_handler, 0) == -1) {
 			eprintf ("Cannot setup the SIGALRM handler.\n");
@@ -185,6 +188,15 @@ static bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 	return false;
 }
 
+static void* start_fsmon(void* arg)
+{
+	if (arg == NULL) return NULL;
+	FileMonitor* fm = (FileMonitor*) arg;
+
+	fm->backend.loop(fm, callback);
+	return NULL;
+}
+
 static void help (const char *argv0) {
 	eprintf ("Usage: %s [-Jjc] [-a sec] [-b dir] [-B name] [-p pid] [-P proc] [path]\n"
 		" -a [sec]          stop monitoring after N seconds (alarm)\n"
@@ -225,21 +237,17 @@ static void list_backends() {
 	}
 }
 
-static void swap_process(char* cmd) {
-	if (execl(cmd, cmd, NULL) == -1) {
-		eprintf("FATAL ERROR trying to spawn %s\n", cmd);
-		exit(1);
-	}
-}
-
 int main (int argc, char **argv) {
 	int c, ret = 0;
+	char binpath[FILENAME_MAX] = { 0 };
+
 #if __APPLE__
 	fm.backend = fmb_devfsev;
 #else
-	fm.backend = fmb_inotify;
+	fm.backend = fmb_fanotify;
 #endif
 
+	// Cmdline option parsing
 	while ((c = getopt (argc, argv, "a:cshb:B:d:fjJo:Lne:p:P:v")) != -1) {
 		switch (c) {
 		case 'a':
@@ -278,7 +286,7 @@ int main (int argc, char **argv) {
 			size_t pathlen = strnlen(optarg, FILENAME_MAX) + 1;
 			outputfpath = malloc(pathlen * sizeof(char));
 			if (!outputfpath) {
-				eprintf("FATAL Could not allocate fname buffer!");
+				eprintf("FATAL Could not allocate fname buffer!\n");
 				exit(1);
 			}
 			strncpy(outputfpath, optarg, pathlen);
@@ -292,16 +300,7 @@ int main (int argc, char **argv) {
 			break;
 		case 'e':
 		{
-			pid_t child_pid = fork();
-
-			if (child_pid == 0) {
-				// Child process
-				swap_process(optarg);
-			}
-			else {
-				fm.pid = (int) child_pid;
-			}
-
+			strncpy(binpath, optarg, FILENAME_MAX);
 			break;
 		}
 		case 'p':
@@ -316,14 +315,15 @@ int main (int argc, char **argv) {
 		}
 	}
 
+	// Check for errors in the arguments
 	if (optind < argc) {
 		fm.root = argv[optind];
 	}
-	if (fm.child && !fm.pid) {
+	if (fm.child && (!fm.pid && binpath[0] == '\0')) {
 		eprintf ("-c requires -p or -e\n");
 		return 1;
 	}
-	if (fm.autoexit && !fm.pid) {
+	if (fm.autoexit && (!fm.pid && binpath[0] == '\0')) {
 		eprintf ("-s requires -p or -e\n");
 		return 1;
 	}
@@ -340,15 +340,46 @@ int main (int argc, char **argv) {
 		fprintf (outfd, "[");
 	}
 
-	// Start processing FS events
-	if (fm.backend.begin (&fm)) {
-		(void)setup_signals ();
-		fm.backend.loop (&fm, callback);
-	} else {
-		ret = 1;
+	/******** Start processing events ********/
+
+	// FS events
+	pid_t child_pid  = -1;
+	pthread_t fs_tid = -1;
+
+	if (binpath[0] != '\0')
+	{
+		child_pid = fork();
+		if (child_pid == 0)
+		{
+			// Child process => spawn tracee
+			spawn_tracee_process(binpath);
+		}
+
+		// Parent process
+		fm.pid = (int) child_pid;
 	}
 
-	// Processing finished => clean-up
+	if (fm.backend.begin(&fm)) {
+		(void) setup_signals();
+		// Spawn a threat to consume FS events so we don't block
+		pthread_create(&fs_tid, NULL, start_fsmon, &fm);
+	}
+	else {
+		perror("[!] ERROR FSMON could not be started ...");
+	}
+
+	// ptrace loop
+	if (child_pid != -1) {
+		// Blocking loop
+		ptrace_syscall_mon_loop(&child_pid);
+	}
+
+	/******** Processing finished, clean up ********/
+	// Wait for FS to finish
+	if (fs_tid != -1) {
+		pthread_join(fs_tid, NULL);
+	}
+
 	if (fm.json && !fm.jsonStream) {
 		fprintf (outfd, "]\n");
 	}

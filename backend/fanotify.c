@@ -136,6 +136,7 @@ static bool fm_loop (FileMonitor *fm, FileMonitorCallback cb) {
 		return false;
 	}
 
+
 	while (select (fan_fd + 1, &rfds, NULL, NULL, NULL) < 0) {
 		if (errno != EINTR || !fm->running) {
 			goto fail;

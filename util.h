@@ -5,6 +5,7 @@
 
 #define IS_PRINTABLE(x) (x>=' ' && x<='~')
 
+char* syscall_n_to_name(long syscall_n);
 char *fmu_jsonfilter(const char *s);
 const char *fm_argstr(int type);
 const char *fm_typestr(int type);

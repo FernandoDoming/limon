@@ -11,11 +11,12 @@
 #include "fsmon.h"
 #include "trace/trace.h"
 
-static FileMonitor fm = { 0 };
-static bool firstnode = true;
 static bool colorful = true;
-static char* outputfpath = NULL;
-static FILE* outfd = NULL;
+static char* outfpath = NULL;
+
+bool firstnode = true;
+FileMonitor fm = { 0 };
+FILE* outfd    = NULL;
 
 FileMonitorBackend *backends[] = {
 #if __APPLE__
@@ -94,7 +95,9 @@ static bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 			firstnode = true;
 		}
 		char *filename = fmu_jsonfilter (ev->file);
-		fprintf (outfd, "%s{\"filename\":\"%s\",\"pid\":%d,"
+		fprintf (outfd,
+			"%s{\"event_type\":\"fsevent\","
+			"\"filename\":\"%s\",\"pid\":%d,"
 			"\"uid\":%d,\"gid\":%d,", 
 			(fm->jsonStream || firstnode)? "":",", filename, ev->pid, ev->uid, ev->gid);
 		firstnode = false;
@@ -284,12 +287,12 @@ int main (int argc, char **argv) {
 		case 'o':
 		{
 			size_t pathlen = strnlen(optarg, FILENAME_MAX) + 1;
-			outputfpath = malloc(pathlen * sizeof(char));
-			if (!outputfpath) {
+			outfpath = malloc(pathlen * sizeof(char));
+			if (!outfpath) {
 				eprintf("FATAL Could not allocate fname buffer!\n");
 				exit(1);
 			}
-			strncpy(outputfpath, optarg, pathlen);
+			strncpy(outfpath, optarg, pathlen);
 			break;
 		}
 		case 'L':
@@ -329,8 +332,8 @@ int main (int argc, char **argv) {
 	}
 
 	// Open a descriptor to the desired output
-	if (outputfpath) {
-		outfd = fopen(outputfpath, "a");
+	if (outfpath) {
+		outfd = fopen(outfpath, "a");
 	}
 	else {
 		outfd = stdout;
@@ -387,7 +390,7 @@ int main (int argc, char **argv) {
 	fflush(outfd);
 	fclose(outfd);
 	fm.backend.end(&fm);
-	if (outputfpath) free(outputfpath);
+	if (outfpath) free(outfpath);
 
 	return ret;
 }

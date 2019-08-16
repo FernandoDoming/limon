@@ -8,6 +8,12 @@
 
 #include "trace.h"
 #include "../common/macro.h"
+#include "../fsmon.h"
+#include "../util.h"
+
+extern FILE* outfd;
+extern FileMonitor fm;
+extern bool firstnode;
 
 /*
  * Changes executable image to another one provided by cmd arg 
@@ -93,10 +99,32 @@ void print_syscall_x64(struct user_regs_struct* regs)
     long syscall = regs->orig_rax;
 
     /* Print a representation of the system call */
-    fprintf(stderr, "%ld(%ld, %ld, %ld, %ld, %ld, %ld)",
+    if (fm.json || fm.jsonStream) {
+        fprintf(
+            outfd,
+            "%s{\"event_type\":\"syscall\","
+            "\"syscall_n\":%ld,"
+            "\"syscall_name\":\"%s\""
+            "\"rdi\":%ld"
+            "\"rsi\":%ld"
+            "\"rdx\":%ld"
+            "\"r10\":%ld"
+            "\"r8\":%ld"
+            "\"r9\":%ld"
+            "}\n",
+            (fm.jsonStream || firstnode) ? "" : ",",
             syscall,
+            syscall_n_to_name(syscall),
             (long)regs->rdi, (long)regs->rsi, (long)regs->rdx,
-            (long)regs->r10, (long)regs->r8,  (long)regs->r9);
+            (long)regs->r10, (long)regs->r8,  (long)regs->r9
+        );
+    }
+    else {
+        fprintf(outfd, "%s(%ld, %ld, %ld, %ld, %ld, %ld)",
+                syscall_n_to_name(syscall),
+                (long)regs->rdi, (long)regs->rsi, (long)regs->rdx,
+                (long)regs->r10, (long)regs->r8,  (long)regs->r9);
+    }
 }
 
 #endif

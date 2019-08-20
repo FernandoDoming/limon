@@ -5,12 +5,14 @@ CFLAGS+=-Wall
 
 include config.mk
 CFLAGS+=-DFSMON_VERSION=\"$(VERSION)\"
+CFLAGS+=-Icommon/ -Itrace/ -Iinclude/
 
 LDFLAGS+=-pthread
 
 SOURCES=main.c util.c
 SOURCES+=backend/*.c
 SOURCES+=trace/*.c
+SOURCES+=fsmon/*.c
 
 # LINUX: GNU / ANDROID
 #     __

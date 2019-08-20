@@ -8,8 +8,9 @@
 #include <unistd.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <sys/ptrace.h>
 #include "fsmon.h"
-#include "trace/trace.h"
+#include "tracy.h"
 
 static bool colorful = true;
 static char* outfpath = NULL;
@@ -19,27 +20,40 @@ FileMonitor fm = { 0 };
 FILE* outfd    = NULL;
 
 FileMonitorBackend *backends[] = {
-#if __APPLE__
-	&fmb_devfsev,
-	&fmb_kqueue,
-	&fmb_kdebug,
-#if !TARGET_WATCHOS
-	&fmb_fsevapi,
-#endif
-#else
 	&fmb_inotify,
 #if HAVE_FANOTIFY
 	&fmb_fanotify,
 #endif
-#endif
 	NULL
 };
+
+static void help (const char *argv0) {
+	eprintf ("Usage: %s [-Jjc] [-a sec] [-b dir] [-B name] [-p pid] [-P proc] [path]\n"
+		" -a [sec]          stop monitoring after N seconds (alarm)\n"
+		" -b [dir]          backup files to DIR folder (EXPERIMENTAL)\n"
+		" -B [name]         specify an alternative backend\n"
+		" -c                follow children of -p PID or -e bin\n"
+		" -f                show only filename (no path)\n"
+		" -h                show this help\n"
+		" -j                output in JSON format\n"
+		" -J                output in JSON stream format\n"
+		" -o [path]         write output to file\n"
+		" -n                do not use colors\n"
+		" -L                list all filemonitor backends\n"
+		" -e [path/to/bin]  execute and monitor this binary\n"
+		" -p [pid]          only show events from this pid\n"
+		" -P [proc]         events only from process name\n"
+		" -s                exit when the monitored process (-p or -e) exits\n"
+		" -v                show version\n"
+		" [path]            only get events from this path\n"
+		, argv0);
+}
 
 static void control_c (int sig) {
 	fm.running = false;
 }
 
-static bool setup_signals() {
+bool setup_signals() {
 	bool res = true;
 	struct sigaction int_handler = {
 		.sa_handler = control_c
@@ -63,7 +77,7 @@ static bool setup_signals() {
 	return res;
 }
 
-static bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
+bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 	if (fm->child) {
 		if (fm->pid && ev->pid != fm->pid) {
 			if (ev->ppid != fm->pid) {
@@ -200,28 +214,6 @@ static void* start_fsmon(void* arg)
 	return NULL;
 }
 
-static void help (const char *argv0) {
-	eprintf ("Usage: %s [-Jjc] [-a sec] [-b dir] [-B name] [-p pid] [-P proc] [path]\n"
-		" -a [sec]          stop monitoring after N seconds (alarm)\n"
-		" -b [dir]          backup files to DIR folder (EXPERIMENTAL)\n"
-		" -B [name]         specify an alternative backend\n"
-		" -c                follow children of -p PID or -e bin\n"
-		" -f                show only filename (no path)\n"
-		" -h                show this help\n"
-		" -j                output in JSON format\n"
-		" -J                output in JSON stream format\n"
-		" -o [path]         write output to file\n"
-		" -n                do not use colors\n"
-		" -L                list all filemonitor backends\n"
-		" -e [path/to/bin]  execute and monitor this binary\n"
-		" -p [pid]          only show events from this pid\n"
-		" -P [proc]         events only from process name\n"
-		" -s                exit when the monitored process (-p or -e) exits\n"
-		" -v                show version\n"
-		" [path]            only get events from this path\n"
-		, argv0);
-}
-
 static bool use_backend(const char *name) {
 	int i;
 	for (i = 0; backends[i]; i++) {
@@ -243,12 +235,7 @@ static void list_backends() {
 int main (int argc, char **argv) {
 	int c, ret = 0;
 	char binpath[FILENAME_MAX] = { 0 };
-
-#if __APPLE__
-	fm.backend = fmb_devfsev;
-#else
 	fm.backend = fmb_fanotify;
-#endif
 
 	// Cmdline option parsing
 	while ((c = getopt (argc, argv, "a:cshb:B:d:fjJo:Lne:p:P:v")) != -1) {
@@ -345,7 +332,7 @@ int main (int argc, char **argv) {
 
 	/******** Start processing events ********/
 
-	// FS events
+	/**** FS events ****/
 	pid_t child_pid  = -1;
 	pthread_t fs_tid = -1;
 
@@ -371,7 +358,7 @@ int main (int argc, char **argv) {
 		perror("[!] ERROR FSMON could not be started ...");
 	}
 
-	// ptrace loop
+	/**** ptrace events ****/
 	if (child_pid != -1) {
 		// Blocking loop
 		ptrace_syscall_mon_loop(&child_pid);

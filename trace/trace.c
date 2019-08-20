@@ -7,9 +7,9 @@
 #include <errno.h>
 
 #include "trace.h"
-#include "../common/macro.h"
-#include "../fsmon.h"
-#include "../util.h"
+#include "macro.h"
+#include "fsmon.h"
+#include "util.h"
 
 extern FILE* outfd;
 extern FileMonitor fm;
@@ -40,17 +40,29 @@ void* ptrace_syscall_mon_loop(void* optarg)
 {
     if (optarg == NULL) return NULL;
 
-    pid_t child_pid = *(pid_t*) optarg;
-    waitpid(child_pid, 0, 0);
+    pid_t pid  = *(pid_t*) optarg;
+    int status = 0;
+    long ptrace_options = PTRACE_O_TRACESYSGOOD
+                            | PTRACE_O_TRACEFORK
+                            | PTRACE_O_TRACEVFORK
+                            | PTRACE_O_TRACECLONE
+                            | PTRACE_O_TRACEEXIT
+                            | PTRACE_O_TRACEEXEC
+                            | PTRACE_O_TRACEVFORKDONE;
+
+    waitpid(pid, &status, __WALL);
+
+    if (ptrace(PTRACE_SETOPTIONS, pid, NULL, ptrace_options))
+        FATAL("Could not set ptrace options - %s", strerror(errno));
 
     for (;;)
     {
 #       ifdef X64
-        x64_ptrace_loop(child_pid);
+        x64_ptrace_loop(pid);
 #       elif ARM32
-        arm32_ptrace_loop(child_pid);
+        arm32_ptrace_loop(pid);
 #       elif ARM64
-        arm64_ptrace_loop(child_pid);
+        arm64_ptrace_loop(pid);
 #       endif
     }
 
@@ -60,30 +72,30 @@ void* ptrace_syscall_mon_loop(void* optarg)
 /*********************** X64 specific functions ***********************/
 #ifdef X64
 
-void x64_ptrace_loop(pid_t child_pid)
+void x64_ptrace_loop(pid_t pid)
 {
     /* Enter next system call */
-    if (ptrace(PTRACE_SYSCALL, child_pid, 0, 0) == -1)
+    if (ptrace(PTRACE_SYSCALL, pid, 0, 0) == -1)
         FATAL("[ENTER] PTRACE_SYSCALL - %s", strerror(errno));
-    if (waitpid(child_pid, 0, 0) == -1)
+    if (waitpid(pid, 0, 0) == -1)
         FATAL("[ENTER] waitpid - %s", strerror(errno));
 
     /* Gather system call arguments */
     struct user_regs_struct regs;
 
-    if (ptrace(PTRACE_GETREGS, child_pid, 0, &regs) == -1)
+    if (ptrace(PTRACE_GETREGS, pid, 0, &regs) == -1)
         FATAL("GETREGS - %s", strerror(errno));
     
-    print_syscall_x64(&regs);
+    print_syscall_x64(&regs, pid);
 
     /* Run system call and stop on exit */
-    if (ptrace(PTRACE_SYSCALL, child_pid, 0, 0) == -1)
+    if (ptrace(PTRACE_SYSCALL, pid, 0, 0) == -1)
         FATAL("[RUN] PTRACE_SYSCALL - %s", strerror(errno));
-    if (waitpid(child_pid, 0, 0) == -1)
+    if (waitpid(pid, 0, 0) == -1)
         FATAL("[RUN] waitpid - %s", strerror(errno));
 
     /* Get system call result */
-    if (ptrace(PTRACE_GETREGS, child_pid, 0, &regs) == -1) {
+    if (ptrace(PTRACE_GETREGS, pid, 0, &regs) == -1) {
         fputs(" = ?\n", stderr);
         if (errno == ESRCH)
             exit(regs.rdi); // system call was _exit(2) or similar
@@ -94,7 +106,7 @@ void x64_ptrace_loop(pid_t child_pid)
     fprintf(stderr, " = %ld\n", (long) regs.rax);   
 }
 
-void print_syscall_x64(struct user_regs_struct* regs)
+void print_syscall_x64(struct user_regs_struct* regs, pid_t pid)
 {
     long syscall = regs->orig_rax;
 
@@ -103,18 +115,20 @@ void print_syscall_x64(struct user_regs_struct* regs)
         fprintf(
             outfd,
             "%s{\"event_type\":\"syscall\","
+            "\"pid\":%d,"
+            "\"syscall_name\":\"%s\","
             "\"syscall_n\":%ld,"
-            "\"syscall_name\":\"%s\""
-            "\"rdi\":%ld"
-            "\"rsi\":%ld"
-            "\"rdx\":%ld"
-            "\"r10\":%ld"
-            "\"r8\":%ld"
+            "\"rdi\":%ld,"
+            "\"rsi\":%ld,"
+            "\"rdx\":%ld,"
+            "\"r10\":%ld,"
+            "\"r8\":%ld,"
             "\"r9\":%ld"
             "}\n",
             (fm.jsonStream || firstnode) ? "" : ",",
-            syscall,
+            pid,
             syscall_n_to_name(syscall),
+            syscall,
             (long)regs->rdi, (long)regs->rsi, (long)regs->rdx,
             (long)regs->r10, (long)regs->r8,  (long)regs->r9
         );
@@ -132,28 +146,28 @@ void print_syscall_x64(struct user_regs_struct* regs)
 /*********************** ARM32 specific functions ***********************/
 #ifdef ARM32
 
-void arm32_ptrace_loop(pid_t child_pid)
+void arm32_ptrace_loop(pid_t pid)
 {
     /* Enter next system call */
-    if (ptrace(PTRACE_SYSCALL, child_pid, 0, 0) == -1) FATAL("%s", strerror(errno));
-    if (waitpid(child_pid, 0, 0) == -1) FATAL("%s", strerror(errno));
+    if (ptrace(PTRACE_SYSCALL, pid, 0, 0) == -1) FATAL("%s", strerror(errno));
+    if (waitpid(pid, 0, 0) == -1) FATAL("%s", strerror(errno));
 
     /* Gather system call arguments */
     struct user_regs regs;
 
-    if (ptrace(PTRACE_GETREGS, child_pid, 0, &regs) == -1)
+    if (ptrace(PTRACE_GETREGS, pid, 0, &regs) == -1)
         FATAL("%s", strerror(errno));
     
     print_syscall_arm32(&regs);
 
     /* Run system call and stop on exit */
-    if (ptrace(PTRACE_SYSCALL, child_pid, 0, 0) == -1)
+    if (ptrace(PTRACE_SYSCALL, pid, 0, 0) == -1)
         FATAL("%s", strerror(errno));
-    if (waitpid(child_pid, 0, 0) == -1)
+    if (waitpid(pid, 0, 0) == -1)
         FATAL("%s", strerror(errno));
 
     /* Get system call result */
-    if (ptrace(PTRACE_GETREGS, child_pid, 0, &regs) == -1) {
+    if (ptrace(PTRACE_GETREGS, pid, 0, &regs) == -1) {
         fputs(" = ?\n", stderr);
         if (errno == ESRCH)
             exit(regs.rdi); // system call was _exit(2) or similar
@@ -169,28 +183,28 @@ void arm32_ptrace_loop(pid_t child_pid)
 /*********************** ARM64 specific functions ***********************/
 #ifdef ARM64
 
-void arm64_ptrace_loop(pid_t child_pid)
+void arm64_ptrace_loop(pid_t pid)
 {
     /* Enter next system call */
-    if (ptrace(PTRACE_SYSCALL, child_pid, 0, 0) == -1) FATAL("%s", strerror(errno));
-    if (waitpid(child_pid, 0, 0) == -1) FATAL("%s", strerror(errno));
+    if (ptrace(PTRACE_SYSCALL, pid, 0, 0) == -1) FATAL("%s", strerror(errno));
+    if (waitpid(pid, 0, 0) == -1) FATAL("%s", strerror(errno));
 
     /* Gather system call arguments */
     struct user_regs_struct regs;
 
-    if (ptrace(PTRACE_GETREGS, child_pid, 0, &regs) == -1)
+    if (ptrace(PTRACE_GETREGS, pid, 0, &regs) == -1)
         FATAL("%s", strerror(errno));
     
     print_syscall_x64(&regs);
 
     /* Run system call and stop on exit */
-    if (ptrace(PTRACE_SYSCALL, child_pid, 0, 0) == -1)
+    if (ptrace(PTRACE_SYSCALL, pid, 0, 0) == -1)
         FATAL("%s", strerror(errno));
-    if (waitpid(child_pid, 0, 0) == -1)
+    if (waitpid(pid, 0, 0) == -1)
         FATAL("%s", strerror(errno));
 
     /* Get system call result */
-    if (ptrace(PTRACE_GETREGS, child_pid, 0, &regs) == -1) {
+    if (ptrace(PTRACE_GETREGS, pid, 0, &regs) == -1) {
         fputs(" = ?\n", stderr);
         if (errno == ESRCH)
             exit(regs.rdi); // system call was _exit(2) or similar

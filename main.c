@@ -291,7 +291,7 @@ int main (int argc, char **argv) {
 			fm.proc = optarg;
 			break;
 		case 'v':
-			printf ("fsmon %s\n", LIMON_VERSION);
+			print_version();
 			return 0;
 		}
 	}

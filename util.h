@@ -14,6 +14,7 @@ void hexdump(const uint8_t *buf, unsigned int len, int w);
 const char * get_proc_name(int pid, int *ppid);
 bool is_directory (const char *str);
 bool copy_file(const char *src, const char *dst);
+void print_version();
 
 /* plain colors */
 #define Color_RESET      "\x1b[0m"

@@ -30,11 +30,9 @@ FileMonitorBackend *backends[] = {
 };
 
 static void help (const char *argv0) {
-	eprintf ("Usage: %s [-Jjc] [-a sec] [-b dir] [-B name] [-p pid] [-P proc] [path]\n"
-		" -a [sec]          stop monitoring after N seconds (alarm)\n"
+	eprintf ("Usage: %s [options] [filemonitor/root/path]\n"
 		" -b [dir]          backup files to DIR folder (EXPERIMENTAL)\n"
 		" -B [name]         specify an alternative backend\n"
-		" -c                follow children of -p PID or -e bin\n"
 		" -f                show only filename (no path)\n"
 		" -h                show this help\n"
 		" -j                output in JSON format\n"
@@ -45,7 +43,6 @@ static void help (const char *argv0) {
 		" -e [path/to/bin]  execute and monitor this binary\n"
 		" -p [pid]          only show events from this pid\n"
 		" -P [proc]         events only from process name\n"
-		" -s                exit when the monitored process (-p or -e) exits\n"
 		" -v                show version\n"
 		" [path]            only get events from this path\n"
 		, argv0);
@@ -236,33 +233,21 @@ static void list_backends() {
 
 int main (int argc, char **argv) {
 	int c, ret = 0;
-	char binpath[FILENAME_MAX] = { 0 };
-	fm.backend = fmb_fanotify;
+	char* binpath = NULL;
+	fm.backend  = fmb_fanotify;
+	fm.child    = true;
 
-	// Cmdline option parsing
-	while ((c = getopt (argc, argv, "a:cshb:B:d:fjJo:Lne:p:P:v")) != -1) {
+	/* Cmdline option parsing */
+	while ((c = getopt (argc, argv, "hb:B:d:fjJo:Lne:p:P:v")) != -1) {
 		switch (c) {
-		case 'a':
-			fm.alarm = atoi (optarg);
-			if (fm.alarm < 1) {
-				eprintf ("Invalid alarm time\n");
-				return 1;
-			}
-			break;
 		case 'b':
 			fm.link = optarg;
 			break;
 		case 'B':
-			use_backend (optarg);
-			break;
-		case 'c':
-			fm.child = true;
-			break;
-		case 's':
-			fm.autoexit = true;
+			use_backend(optarg);
 			break;
 		case 'h':
-			help (argv[0]);
+			help(argv[0]);
 			return 0;
 		case 'f':
 			fm.fileonly = true;
@@ -276,12 +261,11 @@ int main (int argc, char **argv) {
 		case 'o':
 		{
 			size_t pathlen = strnlen(optarg, FILENAME_MAX) + 1;
-			outfpath = malloc(pathlen * sizeof(char));
+			outfpath = (char*) malloc(pathlen * sizeof(char));
 			if (!outfpath) {
-				eprintf("FATAL Could not allocate fname buffer!\n");
-				exit(1);
+				FATAL("Could not allocate fname buffer!");
 			}
-			strncpy(outfpath, optarg, pathlen);
+			strncpy(outfpath, optarg, pathlen - 1);
 			break;
 		}
 		case 'L':
@@ -292,7 +276,12 @@ int main (int argc, char **argv) {
 			break;
 		case 'e':
 		{
-			strncpy(binpath, optarg, FILENAME_MAX);
+			size_t pathlen = strnlen(optarg, FILENAME_MAX) + 1;
+			binpath = (char*) malloc(pathlen * sizeof(char));
+			if (!binpath) {
+				FATAL("Could not allocate binpath buffer!\n");
+			}
+			strncpy(binpath, optarg, pathlen - 1);
 			break;
 		}
 		case 'p':
@@ -307,20 +296,15 @@ int main (int argc, char **argv) {
 		}
 	}
 
-	// Check for errors in the arguments
+	/* Check for errors in the arguments */
+	if (!fm.pid && !binpath) {
+		FATAL("Either -p or -e are mandatory");
+	}
 	if (optind < argc) {
 		fm.root = argv[optind];
 	}
-	if (fm.child && (!fm.pid && binpath[0] == '\0')) {
-		eprintf ("-c requires -p or -e\n");
-		return 1;
-	}
-	if (fm.autoexit && (!fm.pid && binpath[0] == '\0')) {
-		eprintf ("-s requires -p or -e\n");
-		return 1;
-	}
 
-	// Open a descriptor to the desired output
+	/* Open a descriptor to the desired output */
 	if (outfpath) {
 		outfd = fopen(outfpath, "a");
 	}
@@ -332,54 +316,53 @@ int main (int argc, char **argv) {
 		fprintf (outfd, "[");
 	}
 
-	/******** Start processing events ********/
-
-	/**** FS events ****/
-	pid_t child_pid  = -1;
+	/******** Event processing ********/
+	/* fsmon events */
+	pid_t child_pid  = fm.pid;
 	pthread_t fs_tid = -1;
 
-	if (*binpath)
+	if (binpath)
 	{
 		child_pid = fork();
-		if (child_pid == 0)
-		{
-			// Child process => spawn tracee
+		if (child_pid == 0) {
+			/* Child (tracee) */
 			spawn_tracee_process(binpath);
 		}
 
-		// Parent process
+		/* Parent (tracer) */
 		fm.pid = (int) child_pid;
 	}
 
 	if (fm.backend.begin(&fm)) {
 		(void) setup_signals();
-		// Spawn a threat to consume FS events so we don't block
+		/* Spawn a threat to consume FS events so we don't block */
 		pthread_create(&fs_tid, NULL, start_fsmon, &fm);
 	}
 	else {
 		perror("[!] ERROR FSMON could not be started ...");
 	}
 
-	/**** ptrace events ****/
-	char ** tracy_exec_args = { binpath, NULL };
-	struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN | TRACY_VERBOSE);
-	tracy_set_default_hook(tracy, hook_syscall);
-	tracy_attach(tracy, child_pid);
-	tracy_main(tracy);
-	tracy_free(tracy);
+	/* ptrace events */
+	if (child_pid)
+	{
+		struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
+		tracy_set_default_hook(tracy, hook_syscall);
+		tracy_attach(tracy, child_pid);
+		tracy_main(tracy);
+		tracy_free(tracy);
+	}
 
-	/******** Processing finished, clean up ********/
-	// Wait for FS to finish
-
-
+	/* Monitored proccess exited, cleanup and exit */
 	if (fm.json && !fm.jsonStream) {
 		fprintf (outfd, "]\n");
 	}
 
 	fflush(outfd);
 	fclose(outfd);
+	fm.running = false;
 	fm.backend.end(&fm);
 	if (outfpath) free(outfpath);
+	if (binpath)  free(binpath);
 
 	return ret;
 }

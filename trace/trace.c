@@ -21,7 +21,6 @@ void spawn_tracee_process(void* cmd)
 {
     if (cmd == NULL) return;
 
-    printf("Executing command %s\n", cmd);
 	if (execl(cmd, cmd, NULL) == -1) {
 		FATAL("ERROR trying to spawn %s", (char*) cmd);
 	}

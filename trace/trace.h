@@ -1,12 +1,13 @@
 #include <sys/user.h>
 #include <sys/wait.h>
+#include "tracy.h"
 
 void spawn_tracee_process(void* cmd);
-void* ptrace_syscall_mon_loop(void* optarg);
+int hook_syscall(struct tracy_event* e);
+void print_syscall(struct tracy_event* e);
 
 #ifdef X64
-void x64_ptrace_loop(pid_t pid);
-void print_syscall_x64(struct user_regs_struct* regs, pid_t pid);
+
 #endif
 
 #ifdef ARM32

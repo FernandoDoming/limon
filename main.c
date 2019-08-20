@@ -10,7 +10,9 @@
 #include <pthread.h>
 #include <sys/ptrace.h>
 #include "fsmon.h"
+#include "trace.h"
 #include "tracy.h"
+#include "macro.h"
 
 static bool colorful = true;
 static char* outfpath = NULL;
@@ -300,7 +302,7 @@ int main (int argc, char **argv) {
 			fm.proc = optarg;
 			break;
 		case 'v':
-			printf ("fsmon %s\n", FSMON_VERSION);
+			printf ("fsmon %s\n", LIMON_VERSION);
 			return 0;
 		}
 	}
@@ -336,7 +338,7 @@ int main (int argc, char **argv) {
 	pid_t child_pid  = -1;
 	pthread_t fs_tid = -1;
 
-	if (binpath[0] != '\0')
+	if (*binpath)
 	{
 		child_pid = fork();
 		if (child_pid == 0)
@@ -359,16 +361,16 @@ int main (int argc, char **argv) {
 	}
 
 	/**** ptrace events ****/
-	if (child_pid != -1) {
-		// Blocking loop
-		ptrace_syscall_mon_loop(&child_pid);
-	}
+	char ** tracy_exec_args = { binpath, NULL };
+	struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN | TRACY_VERBOSE);
+	tracy_set_default_hook(tracy, hook_syscall);
+	tracy_attach(tracy, child_pid);
+	tracy_main(tracy);
+	tracy_free(tracy);
 
 	/******** Processing finished, clean up ********/
 	// Wait for FS to finish
-	if (fs_tid != -1) {
-		pthread_join(fs_tid, NULL);
-	}
+
 
 	if (fm.json && !fm.jsonStream) {
 		fprintf (outfd, "]\n");

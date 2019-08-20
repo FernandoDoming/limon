@@ -1,8 +1,8 @@
 #ifndef INCLUDE_FM_FSMON_H
 #define INCLUDE_FM_FSMON_H
 
-#ifndef FSMON_VERSION
-#error FSMON_VERSION is not defined
+#ifndef LIMON_VERSION
+#error LIMON_VERSION is not defined
 #endif
 
 #include <stdint.h>

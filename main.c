@@ -1,4 +1,4 @@
-/* fsmon -- MIT - Copyright NowSecure 2015-2019 - pancake@nowsecure.com  */
+/* EZ PZ lemon squeezy */
 
 #include <stdio.h>
 #include <string.h>

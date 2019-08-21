@@ -94,7 +94,11 @@
             "mov r7, %1\n" \
             "swi %0\n"
         /* OABI SWI_BASE */
+        #ifdef EABI
+        #define TRACY_SWI_BASE (0x0)
+        #else
         #define TRACY_SWI_BASE (0x900000)
+        #endif
     #elif defined(__powerpc__)
         /* On powerpc the syscall number is stored in r0,
          * the arguments in r3-r9 we use r30 for the storing of the pid

@@ -11,9 +11,9 @@ void print_syscall(struct tracy_event* e);
 #endif
 
 #ifdef ARM32
-void arm32_ptrace_loop(pid_t pid);
+
 #endif
 
 #ifdef ARM64
-void arm64_ptrace_loop(pid_t pid);
+
 #endif

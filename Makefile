@@ -25,16 +25,10 @@ SOURCES+=lib/libtracy.a
 FANOTIFY_CFLAGS+=-DHAVE_FANOTIFY=1
 FANOTIFY_CFLAGS+=-DHAVE_SYS_FANOTIFY=1
 
-all: tracy X64
+all: tracy limon
 
-X64: $(SOURCES)
-	$(CC) -o bin/limon_$@ -D $@ $(CFLAGS) $(FANOTIFY_CFLAGS) $(LDFLAGS) $(SOURCES)
-
-ARM32: $(SOURCES)
-	arm-linux-gnueabi-gcc -o bin/limon_$@ -D $@ $(CFLAGS) $(FANOTIFY_CFLAGS) $(LDFLAGS) $(SOURCES)
-
-ARM64: $(SOURCES)
-	aarch64-linux-gnu-gcc -o bin/limon_$@ -D $@ $(CFLAGS) $(FANOTIFY_CFLAGS) $(LDFLAGS) $(SOURCES)
+limon: $(SOURCES)
+	$(CC) -o bin/limon $(CFLAGS) $(FANOTIFY_CFLAGS) $(LDFLAGS) $(SOURCES)
 
 tracy:
 	cd $(TRACYDIR) && $(MAKE) && $(MAKE) clean

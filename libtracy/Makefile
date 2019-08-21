@@ -29,6 +29,7 @@ ifeq ($(uname_M),armv5tel)
 arch="arm"
 else ifeq ($(uname_M),armv7l)
 arch="arm"
+CFLAGS+=-DEABI
 else ifeq ($(uname_M),x86_64)
 arch="x86_64"
 else ifeq ($(uname_M),i686)

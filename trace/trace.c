@@ -3,18 +3,19 @@
 #include <syscall.h>
 #include <sys/ptrace.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #include "trace.h"
-#include "macro.h"
 #include "fsmon.h"
 #include "util.h"
+#include "macro.h"
 
 extern FILE* outfd;
 extern FileMonitor fm;
 extern bool firstnode;
 
 /*
- * Changes executable image to another one provided by cmd arg 
+ * Changes execurtable image to another one provided by cmd arg 
  * and trace it with ptrace. Should be run by a child proc
  */
 void spawn_tracee_process(void* cmd)
@@ -29,6 +30,101 @@ void spawn_tracee_process(void* cmd)
 int hook_syscall(struct tracy_event* e) {
     print_syscall(e);
     return TRACY_HOOK_CONTINUE;
+}
+
+int hook_execve(struct tracy_event* e) {
+    fprintf(
+        outfd,
+        "%s{\"event_type\":\"syscall\","
+        "\"pid\":%d,"
+        "\"syscall_name\":\"%s\","
+        "\"syscall_n\":%ld,",
+        (fm.jsonStream || firstnode) ? "" : ",",
+        e->child->pid,
+        get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
+        e->syscall_num
+    );
+
+    /* Read the remote binary path */
+    char binpath[BUFSIZE] = {};
+    tracy_read_mem(
+        e->child,
+        binpath,
+        (tracy_child_addr_t) e->args.a0,
+        BUFSIZE
+    );
+
+    fprintf(
+        outfd,
+        "\"filename\":\"%s\"",
+        binpath
+    );
+
+    /* Read remote argv list */
+    str_list_entry* item = NULL;
+    TAILQ_INIT(&argv_head);
+
+    size_t argc = read_remote_string_array(
+        e, (char**) e->args.a1,
+        &argv_head
+    );
+
+    if (argc > 0)
+    {
+        fprintf(outfd, ",\"args\": [");
+
+        unsigned char i = 0;
+        TAILQ_FOREACH(item, &argv_head, entries) {
+            if (i > 0) {
+                fprintf(outfd, ",");
+            }
+            fprintf(
+                outfd,
+                "\"%s\"",
+                item->data
+            );
+            i++;
+        }
+        fprintf(outfd, "]");
+    }
+
+    fprintf(outfd, "}\n");
+
+    while (item = TAILQ_FIRST(&argv_head)) {
+        TAILQ_REMOVE(&argv_head, item, entries);
+        free(item);
+    }
+
+    return TRACY_HOOK_CONTINUE;
+}
+
+size_t read_remote_string_array(
+    struct tracy_event* e,
+    char** rtable,
+    struct argv_q* argv_head
+)
+{
+    if (rtable == NULL) return 0;
+
+    str_list_entry* item = NULL;
+    size_t nread = 0;
+
+    while(true)
+    {
+        char* rstr = NULL;
+        tracy_read_mem(e->child, &rstr, rtable + nread, sizeof(char*));
+        if (rstr == NULL) break;
+
+        item = malloc(sizeof(str_list_entry));
+        if (item == NULL) return 0;
+
+        tracy_read_mem(e->child, item->data, rstr, BUFSIZE);
+        TAILQ_INSERT_TAIL(argv_head, item, entries);
+
+        nread++;
+    }
+
+    return nread;
 }
 
 void print_syscall(struct tracy_event* e)
@@ -64,24 +160,3 @@ void print_syscall(struct tracy_event* e)
         );
     }
 }
-
-
-/*********************** X64 specific functions ***********************/
-#ifdef X64
-
-
-#endif
-
-/*********************** ARM32 specific functions ***********************/
-#ifdef ARM32
-
-
-
-#endif
-
-/*********************** ARM64 specific functions ***********************/
-#ifdef ARM64
-
-
-
-#endif

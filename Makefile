@@ -5,7 +5,7 @@ CFLAGS+=-I.
 CFLAGS+=-Wall
 
 CFLAGS+=-DLIMON_VERSION=\"$(VERSION)\"
-CFLAGS+=-Icommon/ -Itrace/ -I$(TRACYDIR)
+CFLAGS+=-Icommon/ -Itrace/ -I$(TRACYDIR) -g
 
 LDFLAGS+=-pthread
 

@@ -346,9 +346,12 @@ int main (int argc, char **argv) {
 	if (child_pid)
 	{
 		struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
+		tracy_set_hook(tracy, "execve", TRACY_ABI_NATIVE, hook_execve);
 		tracy_set_default_hook(tracy, hook_syscall);
+
 		tracy_attach(tracy, child_pid);
 		tracy_main(tracy);
+
 		tracy_free(tracy);
 	}
 

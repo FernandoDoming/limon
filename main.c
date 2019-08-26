@@ -345,10 +345,7 @@ int main (int argc, char **argv) {
 	/* ptrace events */
 	if (child_pid)
 	{
-		struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
-		tracy_set_hook(tracy, "execve", TRACY_ABI_NATIVE, hook_execve);
-		tracy_set_default_hook(tracy, hook_syscall);
-
+		struct tracy* tracy = init_tracing();
 		tracy_attach(tracy, child_pid);
 		tracy_main(tracy);
 
@@ -357,7 +354,7 @@ int main (int argc, char **argv) {
 
 	/* Monitored proccess exited, cleanup and exit */
 	if (fm.json && !fm.jsonStream) {
-		fprintf (outfd, "]\n");
+		fprintf(outfd, "]\n");
 	}
 
 	fflush(outfd);

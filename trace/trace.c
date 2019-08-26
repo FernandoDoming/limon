@@ -14,6 +14,15 @@ extern FILE* outfd;
 extern FileMonitor fm;
 extern bool firstnode;
 
+struct tracy* init_tracing()
+{
+    struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
+    tracy_set_hook(tracy, "execve", TRACY_ABI_NATIVE, hook_execve);
+    tracy_set_default_hook(tracy, hook_syscall);
+
+    return tracy;
+}
+
 /*
  * Changes execurtable image to another one provided by cmd arg 
  * and trace it with ptrace. Should be run by a child proc
@@ -27,6 +36,8 @@ void spawn_tracee_process(void* cmd)
 	}
 }
 
+/****************** hooks ******************/
+
 int hook_syscall(struct tracy_event* e) {
     print_syscall(e);
     return TRACY_HOOK_CONTINUE;
@@ -38,11 +49,13 @@ int hook_execve(struct tracy_event* e) {
         "%s{\"event_type\":\"syscall\","
         "\"pid\":%d,"
         "\"syscall_name\":\"%s\","
-        "\"syscall_n\":%ld,",
+        "\"syscall_n\":%ld,"
+        "\"return\":%ld",
         (fm.jsonStream || firstnode) ? "" : ",",
         e->child->pid,
         get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
-        e->syscall_num
+        e->syscall_num,
+        e->args.return_code
     );
 
     /* Read the remote binary path */
@@ -98,6 +111,8 @@ int hook_execve(struct tracy_event* e) {
     return TRACY_HOOK_CONTINUE;
 }
 
+/****************** utils ******************/
+
 size_t read_remote_string_array(
     struct tracy_event* e,
     char** rtable,
@@ -142,21 +157,24 @@ void print_syscall(struct tracy_event* e)
             "\"a2\":%ld,"
             "\"a3\":%ld,"
             "\"a4\":%ld,"
-            "\"a5\":%ld"
+            "\"a5\":%ld,"
+            "\"return\":%ld"
             "}\n",
             (fm.jsonStream || firstnode) ? "" : ",",
             e->child->pid,
             get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
             e->syscall_num,
             (long) e->args.a0, (long) e->args.a1, (long) e->args.a2,
-            (long) e->args.a3, (long) e->args.a4, (long) e->args.a5
+            (long) e->args.a3, (long) e->args.a4, (long) e->args.a5,
+            e->args.return_code
         );
     }
     else {
-        fprintf(outfd, "%s(%ld, %ld, %ld, %ld, %ld, %ld)",
+        fprintf(outfd, "%s(%ld, %ld, %ld, %ld, %ld, %ld) = %ld",
             get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
             (long) e->args.a0, (long) e->args.a1, (long) e->args.a2,
-            (long) e->args.a3, (long) e->args.a4, (long) e->args.a5
+            (long) e->args.a3, (long) e->args.a4, (long) e->args.a5,
+            e->args.return_code
         );
     }
 }

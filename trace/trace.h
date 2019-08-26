@@ -7,6 +7,7 @@
 
 TAILQ_HEAD(argv_q, str_list_entry) argv_head;
 
+struct tracy* init_tracing();
 void spawn_tracee_process(void* cmd);
 void print_syscall(struct tracy_event* e);
 

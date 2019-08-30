@@ -9,22 +9,58 @@
 #include "fsmon.h"
 #include "util.h"
 #include "macro.h"
+#include "types.h"
 
 extern FILE* outfd;
 extern FileMonitor fm;
 extern bool firstnode;
 
-struct tracy* init_tracing()
+struct tracy* init_tracing(pid_t tracee_pid)
 {
     struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
+    tracy_set_hook(tracy, "clone",  TRACY_ABI_NATIVE, hook_clone);
     tracy_set_hook(tracy, "execve", TRACY_ABI_NATIVE, hook_execve);
     tracy_set_default_hook(tracy, hook_syscall);
+
+    TAILQ_INIT(&pid_head);
+    add_traced_proc(tracee_pid, 0);
 
     return tracy;
 }
 
+void free_tracing(struct tracy* tracy)
+{
+    tracy_free(tracy);
+
+    pid_entry* item = NULL;
+    while (item = TAILQ_FIRST(&pid_head)) {
+        TAILQ_REMOVE(&pid_head, item, entries);
+        free(item);
+    }
+}
+
+void add_traced_proc(pid_t pid, pid_t ppid)
+{
+    pid_entry* item = malloc(sizeof(*item));
+    if (!item) FATAL("malloc: Not enough resources to alloc pid_entry");
+    item->pid  = pid;
+    item->ppid = ppid;
+
+    TAILQ_INSERT_TAIL(&pid_head, item, entries);
+}
+
+bool is_traced_proc(pid_t pid)
+{
+    pid_entry* item = NULL;
+    TAILQ_FOREACH(item, &pid_head, entries) {
+        if (item->pid == pid) return true;
+    }
+
+    return false;
+}
+
 /*
- * Changes execurtable image to another one provided by cmd arg 
+ * Changes execurtable image to another one provided by cmd arg
  * and trace it with ptrace. Should be run by a child proc
  */
 void spawn_tracee_process(void* cmd)
@@ -40,6 +76,15 @@ void spawn_tracee_process(void* cmd)
 
 int hook_syscall(struct tracy_event* e) {
     print_syscall(e);
+    return TRACY_HOOK_CONTINUE;
+}
+
+int hook_clone(struct tracy_event* e)
+{
+    if (e->args.return_code > 0) {
+        add_traced_proc(e->args.return_code, e->child->pid);
+    }
+
     return TRACY_HOOK_CONTINUE;
 }
 

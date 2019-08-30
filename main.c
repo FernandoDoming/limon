@@ -111,7 +111,7 @@ bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 		fprintf (outfd,
 			"%s{\"event_type\":\"fsevent\","
 			"\"filename\":\"%s\",\"pid\":%d,"
-			"\"uid\":%d,\"gid\":%d,", 
+			"\"uid\":%d,\"gid\":%d,",
 			(fm->jsonStream || firstnode)? "":",", filename, ev->pid, ev->uid, ev->gid);
 		firstnode = false;
 		free (filename);
@@ -345,11 +345,11 @@ int main (int argc, char **argv) {
 	/* ptrace events */
 	if (child_pid)
 	{
-		struct tracy* tracy = init_tracing();
+		struct tracy* tracy = init_tracing(child_pid);
 		tracy_attach(tracy, child_pid);
-		tracy_main(tracy);
+		tracy_main(tracy);			// Blocking syscall loop
 
-		tracy_free(tracy);
+		free_tracing(tracy);
 	}
 
 	/* Monitored proccess exited, cleanup and exit */

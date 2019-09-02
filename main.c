@@ -18,8 +18,9 @@ static bool colorful = true;
 static char* outfpath = NULL;
 
 bool firstnode = true;
-FileMonitor fm = { 0 };
+FileMonitor fm = {};
 FILE* outfd    = NULL;
+pthread_mutex_t output_lock = {};
 
 FileMonitorBackend *backends[] = {
 	&fmb_inotify,
@@ -108,6 +109,8 @@ bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 			firstnode = true;
 		}
 		char *filename = fmu_jsonfilter (ev->file);
+
+		pthread_mutex_lock(&output_lock);
 		fprintf (outfd,
 			"%s{\"event_type\":\"fsevent\","
 			"\"filename\":\"%s\",\"pid\":%d,"
@@ -151,6 +154,9 @@ bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 			fprintf (outfd, "\n");
 			fflush (outfd);
 		}
+
+		pthread_mutex_unlock(&output_lock);
+
 	} else {
 		if (fm->fileonly && ev->file) {
 			const char *p = ev->file;
@@ -321,6 +327,8 @@ int main (int argc, char **argv) {
 	pid_t child_pid  = fm.pid;
 	pthread_t fs_tid = -1;
 
+	pthread_mutex_init(&output_lock, NULL);
+
 	if (binpath)
 	{
 		child_pid = fork();
@@ -357,6 +365,7 @@ int main (int argc, char **argv) {
 		fprintf(outfd, "]\n");
 	}
 
+	pthread_mutex_destroy(&output_lock);
 	fflush(outfd);
 	fclose(outfd);
 	fm.running = false;

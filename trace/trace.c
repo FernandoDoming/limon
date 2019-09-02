@@ -14,6 +14,7 @@
 extern FILE* outfd;
 extern FileMonitor fm;
 extern bool firstnode;
+extern pthread_mutex_t output_lock;
 
 struct tracy* init_tracing(pid_t tracee_pid)
 {
@@ -75,7 +76,10 @@ void spawn_tracee_process(void* cmd)
 /****************** hooks ******************/
 
 int hook_syscall(struct tracy_event* e) {
+    pthread_mutex_lock(&output_lock);
     print_syscall(e);
+    pthread_mutex_unlock(&output_lock);
+
     return TRACY_HOOK_CONTINUE;
 }
 
@@ -89,6 +93,7 @@ int hook_clone(struct tracy_event* e)
 }
 
 int hook_execve(struct tracy_event* e) {
+    pthread_mutex_lock(&output_lock);
     fprintf(
         outfd,
         "%s{\"event_type\":\"syscall\","
@@ -147,6 +152,7 @@ int hook_execve(struct tracy_event* e) {
     }
 
     fprintf(outfd, "}\n");
+    pthread_mutex_unlock(&output_lock);
 
     while (item = TAILQ_FIRST(&argv_head)) {
         TAILQ_REMOVE(&argv_head, item, entries);

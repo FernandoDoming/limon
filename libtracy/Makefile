@@ -2,7 +2,7 @@
 
 CFLAGS+=-std=gnu99 -pedantic -Wall -Wextra -Werror -Wno-unused-result -pipe
 CFLAGS+=-D_POSIX_SOURCE -D_GNU_SOURCE
-CFLAGS+=-pthread -fPIC -I/usr/include/x86_64-linux-gnu
+CFLAGS+=-pthread -fPIC
 
 
 LDFLAGS+=-rdynamic -pthread
@@ -30,7 +30,10 @@ arch="arm"
 else ifeq ($(uname_M),armv7l)
 arch="arm"
 CFLAGS+=-DEABI
+else ifeq ($(uname_M),aarch64)
+arch="arm64"
 else ifeq ($(uname_M),x86_64)
+CFLAGS+=-I/usr/include/x86_64-linux-gnu
 arch="x86_64"
 else ifeq ($(uname_M),i686)
 arch="i686"
@@ -45,6 +48,9 @@ ARCH_OS=arch/amd64/arch.o
 else ifeq ($(arch), "arm")
 ARCH_HS=arch/arm/arch.h arch/arm/syscalls.h
 ARCH_OS=arch/arm/arch.o
+else ifeq ($(arch), "arm64")
+ARCH_HS=arch/arm64/arch.h arch/arm64/syscalls.h
+ARCH_OS=arch/arm64/arch.o
 else ifeq ($(arch), "i686")
 ARCH_HS=arch/x86/arch.h arch/x86/syscalls.h
 ARCH_OS=arch/x86/arch.o
@@ -188,6 +194,23 @@ arch/arm/syscall_eabi.h:
 		| $(CC) $(CFLAGS)  - -E -P  | ( echo "#include <sys/syscall.h>" ; cat ) \
 		| grep -v '# '| $(CC) $(CFLAGS) -E -P - | grep '{.*' \
 		> arch/arm/syscall_eabi.h
+
+else ifeq ($(arch),"arm64")
+#
+#					 *** ARM64 ***
+#
+arch/arm64/arch.o: $(TRACY_HS) arch/arm64/syscalls.h
+arch/arm64/syscalls.h: $(TRACY_HS) arch/arm64/syscall_eabi.h
+
+arch/arm64/syscall_eabi.h:
+	echo "#include <sys/syscall.h>" | $(CC) $(CFLAGS) - -E -P -dM | \
+		grep "define SYS" | cut -f2 -d" " \
+		| ( echo "#define DEF_SYSCALL(NAME) {#NAME, SYS_ ## NAME}," ; \
+		sed 's/SYS_//;s/\(.*\)/DEF_SYSCALL(&)/' ; echo "{NULL, -1}") \
+		| $(CC) $(CFLAGS)  - -E -P  | ( echo "#include <sys/syscall.h>" ; cat ) \
+		| grep -v '# '| $(CC) $(CFLAGS) -E -P - | grep '{.*' \
+		> arch/arm64/syscall_eabi.h
+
 else ifeq ($(arch),"i686")
 #
 #					 *** x86 ***

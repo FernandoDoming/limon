@@ -104,14 +104,14 @@
         /*
          * ARM64
          */
-        #define SET_SYSCALL "a"
+        #define SET_SYSCALL "n"
         #define INLINE_ARG0 "b"
         #define INLINE_ARG1 "i"
         #define LOAD_TRACER_PID \
             "mov x0, x4\n" \
-            "mov x1, %2\n"
+            "mov x1, %1\n"
         #define ENTER_KERNEL \
-            "mov x8, %1\n" \
+            "mov x8, %0\n" \
             "svc 0\n"
 
     #elif defined(__powerpc__)

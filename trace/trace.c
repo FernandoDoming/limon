@@ -100,7 +100,7 @@ int hook_execve(struct tracy_event* e) {
         "\"pid\":%d,"
         "\"syscall_name\":\"%s\","
         "\"syscall_n\":%ld,"
-        "\"return\":%ld",
+        "\"return\":%ld,",
         (fm.jsonStream || firstnode) ? "" : ",",
         e->child->pid,
         get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),

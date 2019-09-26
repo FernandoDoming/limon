@@ -42,8 +42,6 @@ static void help (const char *argv0) {
 		" -n                do not use colors\n"
 		" -L                list all filemonitor backends\n"
 		" -e [path/to/bin]  execute and monitor this binary\n"
-		" -p [pid]          only show events from this pid\n"
-		" -P [proc]         events only from process name\n"
 		" -v                show version\n"
 		" [path]            only get events from this path\n"
 		, argv0);
@@ -290,12 +288,6 @@ int main (int argc, char **argv) {
 			strncpy(binpath, optarg, pathlen - 1);
 			break;
 		}
-		case 'p':
-			fm.pid = atoi (optarg);
-			break;
-		case 'P':
-			fm.proc = optarg;
-			break;
 		case 'v':
 			print_version();
 			return 0;

@@ -4,6 +4,7 @@
 #include <sys/ptrace.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <string.h>
 
 #include "trace.h"
 #include "fsmon.h"
@@ -68,8 +69,40 @@ void spawn_tracee_process(void* cmd)
 {
     if (cmd == NULL) return;
 
-	if (execl(cmd, cmd, NULL) == -1) {
-		FATAL("ERROR trying to spawn %s", (char*) cmd);
+    /* Obtain the path to the binary */
+    char bin[BUFSIZE] = {};
+    strncpy(bin, cmd, BUFSIZE);
+    char* spc = strchr(bin, ' ');
+    if (spc != NULL) *spc = '\0';
+
+    /* Count number of args */
+    int parts = 0;
+    char* pch = cmd;
+    while (pch != NULL) {
+        pch = strchr(pch, ' ');
+        if (pch) {
+            parts++;
+            pch++;
+        }
+    }
+    parts++;
+
+    /* Split the cmd into the argv format */
+    char** args = NULL;
+    args = (char*) calloc(parts + 1, sizeof(char*));
+    if (args == NULL) FATAL("Not enough resources");
+
+    char* delimiter = strtok(cmd, " ");
+    int i = 0;
+    while (delimiter != NULL) {
+        args[i] = delimiter;
+        delimiter = strtok(NULL, " ");
+        i++;
+    }
+    args[i] = NULL;
+
+	if (execv(bin, args) == -1) {
+		FATAL("ERROR trying to spawn %s\n", (char*) cmd);
 	}
 }
 

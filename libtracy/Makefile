@@ -68,6 +68,7 @@ default: libtracy.a libtracy.so $(TRACY_OS) $(ARCH_OS)
 # default is no longer tests
 
 libtracy.a: $(TRACY_OS) $(ARCH_OS)
+	mkdir -p ../lib
 	ar cr ../lib/$@ $^
 
 libtracy.so: $(TRACY_OS) $(ARCH_OS)

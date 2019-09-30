@@ -28,6 +28,7 @@ FANOTIFY_CFLAGS+=-DHAVE_SYS_FANOTIFY=1
 all: tracy limon
 
 limon: $(SOURCES)
+	mkdir -p bin
 	$(CC) -o bin/limon $(CFLAGS) $(FANOTIFY_CFLAGS) $(LDFLAGS) $(SOURCES)
 
 tracy:

@@ -20,6 +20,9 @@ extern pthread_mutex_t output_lock;
 struct tracy* init_tracing(pid_t tracee_pid)
 {
     struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
+    tracy_set_hook(tracy, "write",  TRACY_ABI_NATIVE, hook_write);
+    tracy_set_hook(tracy, "open",  TRACY_ABI_NATIVE, hook_open);
+    tracy_set_hook(tracy, "openat",  TRACY_ABI_NATIVE, hook_openat);
     tracy_set_hook(tracy, "clone",  TRACY_ABI_NATIVE, hook_clone);
     tracy_set_hook(tracy, "execve", TRACY_ABI_NATIVE, hook_execve);
     tracy_set_default_hook(tracy, hook_syscall);
@@ -125,6 +128,137 @@ int hook_clone(struct tracy_event* e)
     return TRACY_HOOK_CONTINUE;
 }
 
+int hook_open(struct tracy_event* e)
+{
+    pthread_mutex_lock(&output_lock);
+
+    fprintf(
+        outfd,
+        "%s{\"event_type\":\"syscall\","
+        "\"pid\":%d,"
+        "\"syscall_name\":\"%s\","
+        "\"syscall_n\":%ld,"
+        "\"return\":%ld,",
+        (fm.jsonStream || firstnode) ? "" : ",",
+        e->child->pid,
+        get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
+        e->syscall_num,
+        e->args.return_code
+    );
+
+    char buffer[BUFSIZE] = {};
+    read_remote_string(e, (char*) e->args.a0, buffer, BUFSIZE);
+
+    fprintf(
+        outfd,
+        "\"filename\":"
+    );
+
+    print_scaped_string(outfd, buffer, BUFSIZE);
+
+    fprintf(
+        outfd,
+        ","
+    );
+
+    fprintf(
+        outfd,
+        "\"flags\":%ld,"
+        "\"mode\":%ld}\n",
+        e->args.a1,
+        e->args.a2
+    );
+
+    pthread_mutex_unlock(&output_lock);
+    return TRACY_HOOK_CONTINUE;
+}
+
+int hook_openat(struct tracy_event* e)
+{
+    pthread_mutex_lock(&output_lock);
+
+    fprintf(
+        outfd,
+        "%s{\"event_type\":\"syscall\","
+        "\"pid\":%d,"
+        "\"syscall_name\":\"%s\","
+        "\"syscall_n\":%ld,"
+        "\"return\":%ld,",
+        (fm.jsonStream || firstnode) ? "" : ",",
+        e->child->pid,
+        get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
+        e->syscall_num,
+        e->args.return_code
+    );
+
+    char buffer[BUFSIZE] = {};
+    read_remote_string(e, (char*) e->args.a1, buffer, BUFSIZE);
+
+    fprintf(
+        outfd,
+        "\"filename\":\""
+    );
+    print_scaped_string(outfd, buffer, BUFSIZE);
+    fprintf(
+        outfd,
+        "\","
+    );
+
+    fprintf(
+        outfd,
+        "\"dfd\":%ld,"
+        "\"flags\":%ld,"
+        "\"mode\":%ld}\n",
+        e->args.a0,
+        e->args.a2,
+        e->args.a3
+    );
+
+    pthread_mutex_unlock(&output_lock);
+    return TRACY_HOOK_CONTINUE;
+}
+
+int hook_write(struct tracy_event* e)
+{
+    pthread_mutex_lock(&output_lock);
+    fprintf(
+        outfd,
+        "%s{\"event_type\":\"syscall\","
+        "\"pid\":%d,"
+        "\"syscall_name\":\"%s\","
+        "\"syscall_n\":%ld,"
+        "\"return\":%ld,",
+        (fm.jsonStream || firstnode) ? "" : ",",
+        e->child->pid,
+        get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
+        e->syscall_num,
+        e->args.return_code
+    );
+
+    char buffer[BUFSIZE] = {};
+    read_remote_string(e, (char*) e->args.a1, buffer, BUFSIZE);
+
+    fprintf(
+        outfd,
+        "\"fd\":%ld,"
+        "\"buffer\":\""
+    );
+
+    print_scaped_string(outfd, buffer, BUFSIZE);
+
+    fprintf(
+        outfd,
+        "\","
+        "\"count\":%ld}\n",
+        e->args.a0,
+        buffer,
+        e->args.a2
+    );
+
+    pthread_mutex_unlock(&output_lock);
+    return TRACY_HOOK_CONTINUE;
+}
+
 int hook_execve(struct tracy_event* e) {
     pthread_mutex_lock(&output_lock);
     fprintf(
@@ -196,6 +330,19 @@ int hook_execve(struct tracy_event* e) {
 }
 
 /****************** utils ******************/
+
+size_t read_remote_string(
+    struct tracy_event* e,
+    char* rstring,
+    char* buffer,
+    size_t buflen
+)
+{
+    if (rstring == NULL || buffer == NULL) return 0;
+
+    tracy_read_mem(e->child, buffer, rstring, buflen);
+    return strnlen(buffer, buflen);
+}
 
 size_t read_remote_string_array(
     struct tracy_event* e,

@@ -18,6 +18,13 @@ bool is_traced_proc(pid_t pid);
 
 void print_syscall(struct tracy_event* e);
 
+size_t read_remote_string(
+    struct tracy_event* e,
+    char* rstring,
+    char* buffer,
+    size_t buflen
+);
+
 size_t read_remote_string_array(
     struct tracy_event* e,
     char** rtable,
@@ -26,4 +33,7 @@ size_t read_remote_string_array(
 
 int hook_syscall(struct tracy_event* e);
 int hook_clone(struct tracy_event* e);
+int hook_open(struct tracy_event* e);
+int hook_openat(struct tracy_event* e);
+int hook_write(struct tracy_event* e);
 int hook_execve(struct tracy_event* e);

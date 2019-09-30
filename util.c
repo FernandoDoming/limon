@@ -6,6 +6,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <locale.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
@@ -222,6 +223,24 @@ char *fmu_jsonfilter(const char *s) {
 		}
 	}
 	return R;
+}
+
+void print_scaped_string(FILE* outfd, char* str, size_t buflen)
+{
+    if (str == NULL) return;
+
+    setlocale(LC_ALL, "C");
+
+    char c = 0;
+    for(int i = 0 ; (c = *str) != '\0' && i < buflen ; i++, str++)
+    {
+		if (isprint(c) && c != '\\') {
+			fputc(c, outfd);
+		}
+		else {
+			fprintf(outfd, "\\x%02x", c);
+		}
+    }
 }
 
 void print_version()

@@ -33,7 +33,7 @@ FileMonitorBackend *backends[] = {
 static void help (const char *argv0) {
 	eprintf ("Usage: %s [options] [filemonitor/root/path]\n"
 		" -b [dir]          backup files to DIR folder (EXPERIMENTAL)\n"
-		" -B [name]         specify an alternative backend\n"
+		" -B [name]         specify an alternative file system monitor backend\n"
 		" -f                show only filename (no path)\n"
 		" -h                show this help\n"
 		" -j                output in JSON format\n"
@@ -42,6 +42,7 @@ static void help (const char *argv0) {
 		" -n                do not use colors\n"
 		" -L                list all filemonitor backends\n"
 		" -e [path/to/bin]  execute and monitor this binary\n"
+		" -p PID            monitor this PID\n"
 		" -v                show version\n"
 		" [path]            only get events from this path\n"
 		, argv0);
@@ -76,17 +77,10 @@ bool setup_signals() {
 }
 
 bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
-	if (fm->child) {
-		if (fm->pid && ev->pid != fm->pid) {
-			if (ev->ppid != fm->pid) {
-				return false;
-			}
-		}
-	} else {
-		if (fm->pid && ev->pid != fm->pid) {
-			return false;
-		}
+	if (fm->child && !is_traced_proc(ev->pid)) {
+		return false;
 	}
+
 	if (fm->root && ev->file) {
 		if (strncmp (ev->file, fm->root, strlen (fm->root))) {
 			return false;
@@ -277,6 +271,9 @@ int main (int argc, char **argv) {
 			return 0;
 		case 'n':
 			colorful = false;
+			break;
+		case 'p':
+			fm.pid = atoi(optarg);
 			break;
 		case 'e':
 		{

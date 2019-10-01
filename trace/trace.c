@@ -241,7 +241,8 @@ int hook_write(struct tracy_event* e)
     fprintf(
         outfd,
         "\"fd\":%ld,"
-        "\"buffer\":\""
+        "\"buffer\":\"",
+        e->args.a0
     );
 
     print_scaped_string(outfd, buffer, BUFSIZE);
@@ -250,8 +251,6 @@ int hook_write(struct tracy_event* e)
         outfd,
         "\","
         "\"count\":%ld}\n",
-        e->args.a0,
-        buffer,
         e->args.a2
     );
 

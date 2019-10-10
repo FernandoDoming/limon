@@ -9,6 +9,7 @@
 #include <inttypes.h>
 #include <pthread.h>
 #include <sys/ptrace.h>
+#include <time.h>
 #include "fsmon.h"
 #include "trace.h"
 #include "tracy.h"
@@ -105,9 +106,16 @@ bool callback(FileMonitor *fm, FileMonitorEvent *ev) {
 		pthread_mutex_lock(&output_lock);
 		fprintf (outfd,
 			"%s{\"event_type\":\"fsevent\","
+			"\"timestamp\":%lu,"
 			"\"filename\":\"%s\",\"pid\":%d,"
 			"\"uid\":%d,\"gid\":%d,",
-			(fm->jsonStream || firstnode)? "":",", filename, ev->pid, ev->uid, ev->gid);
+			(fm->jsonStream || firstnode)? "":",",
+			time(NULL),
+			filename,
+			ev->pid,
+			ev->uid,
+			ev->gid
+		);
 		firstnode = false;
 		free (filename);
 		if (ev->inode) {

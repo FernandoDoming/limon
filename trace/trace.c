@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
 
 #include "trace.h"
 #include "fsmon.h"
@@ -135,11 +136,13 @@ int hook_open(struct tracy_event* e)
     fprintf(
         outfd,
         "%s{\"event_type\":\"syscall\","
+        "\"timestamp\":%lu,"
         "\"pid\":%d,"
         "\"syscall_name\":\"%s\","
         "\"syscall_n\":%ld,"
         "\"return\":%ld,",
         (fm.jsonStream || firstnode) ? "" : ",",
+        time(NULL),
         e->child->pid,
         get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
         e->syscall_num,
@@ -180,11 +183,13 @@ int hook_openat(struct tracy_event* e)
     fprintf(
         outfd,
         "%s{\"event_type\":\"syscall\","
+        "\"timestamp\":%lu,"
         "\"pid\":%d,"
         "\"syscall_name\":\"%s\","
         "\"syscall_n\":%ld,"
         "\"return\":%ld,",
         (fm.jsonStream || firstnode) ? "" : ",",
+        time(NULL),
         e->child->pid,
         get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
         e->syscall_num,
@@ -224,11 +229,13 @@ int hook_write(struct tracy_event* e)
     fprintf(
         outfd,
         "%s{\"event_type\":\"syscall\","
+        "\"timestamp\":%lu,"
         "\"pid\":%d,"
         "\"syscall_name\":\"%s\","
         "\"syscall_n\":%ld,"
         "\"return\":%ld,",
         (fm.jsonStream || firstnode) ? "" : ",",
+        time(NULL),
         e->child->pid,
         get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
         e->syscall_num,
@@ -263,11 +270,13 @@ int hook_execve(struct tracy_event* e) {
     fprintf(
         outfd,
         "%s{\"event_type\":\"syscall\","
+        "\"timestamp\":%lu,"
         "\"pid\":%d,"
         "\"syscall_name\":\"%s\","
         "\"syscall_n\":%ld,"
         "\"return\":%ld,",
         (fm.jsonStream || firstnode) ? "" : ",",
+        time(NULL),
         e->child->pid,
         get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
         e->syscall_num,
@@ -379,6 +388,7 @@ void print_syscall(struct tracy_event* e)
         fprintf(
             outfd,
             "%s{\"event_type\":\"syscall\","
+            "\"timestamp\":%lu,"
             "\"pid\":%d,"
             "\"syscall_name\":\"%s\","
             "\"syscall_n\":%ld,"
@@ -391,6 +401,7 @@ void print_syscall(struct tracy_event* e)
             "\"return\":%ld"
             "}\n",
             (fm.jsonStream || firstnode) ? "" : ",",
+            time(NULL),
             e->child->pid,
             get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
             e->syscall_num,

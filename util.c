@@ -206,7 +206,7 @@ bool copy_file(const char *src, const char *dst) {
 	return true;
 }
 
-static bool isPrintable(const char ch) {
+static bool is_printable(const char ch) {
 	if (ch == '"' || ch == '\\') {
 		return false;
 	}
@@ -216,7 +216,7 @@ static bool isPrintable(const char ch) {
 char *fmu_jsonfilter(const char *s) {
 	char *r, *R = strdup (s);
 	for (r = R; *r; ) {
-		if (isPrintable (*r)) {
+		if (is_printable (*r)) {
 			r++;
 		} else {
 			memmove (r, r + 1, strlen (r) + 1);
@@ -234,7 +234,7 @@ void print_scaped_string(FILE* outfd, char* str, size_t buflen)
     char c = 0;
     for(int i = 0 ; (c = *str) != '\0' && i < buflen ; i++, str++)
     {
-		if (isprint(c) && c != '\\') {
+		if (is_printable(c)) {
 			fputc(c, outfd);
 		}
 		else {

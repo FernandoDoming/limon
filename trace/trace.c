@@ -316,11 +316,9 @@ int hook_execve(struct tracy_event* e) {
             if (i > 0) {
                 fprintf(outfd, ",");
             }
-            fprintf(
-                outfd,
-                "\"%s\"",
-                item->data
-            );
+            fprintf(outfd, "\"");
+            print_scaped_string(outfd, item->data, 1024);
+            fprintf(outfd, "\"");
             i++;
         }
         fprintf(outfd, "]");

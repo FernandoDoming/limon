@@ -21,6 +21,7 @@ extern pthread_mutex_t output_lock;
 struct tracy* init_tracing(pid_t tracee_pid)
 {
     struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
+    tracy_set_signal_hook(tracy, signal_hook);
     tracy_set_hook(tracy, "write",  TRACY_ABI_NATIVE, hook_write);
     tracy_set_hook(tracy, "open",  TRACY_ABI_NATIVE, hook_open);
     tracy_set_hook(tracy, "openat",  TRACY_ABI_NATIVE, hook_openat);
@@ -111,6 +112,30 @@ void spawn_tracee_process(void* cmd)
 }
 
 /****************** hooks ******************/
+
+int signal_hook(struct tracy_event *e) {
+    fprintf(
+        outfd,
+        "%s{\"event_type\":\"signal\","
+        "\"timestamp\":%lu,"
+        "\"pid\":%d,"
+        "\"signum\":%ld,"
+        "\"signame\":\"%s\","
+        "\"si_code\":%d,"
+        "\"si_status\":%d,"
+        "\"si_pid\":%d}\n",
+        (fm.jsonStream || firstnode) ? "" : ",",
+        time(NULL),
+        e->child->pid,
+        e->signal_num,
+        get_signal_name(e->signal_num),
+        e->siginfo.si_code,
+        e->siginfo.si_status,
+        e->siginfo.si_pid
+    );
+
+    return TRACY_HOOK_CONTINUE;
+}
 
 int hook_syscall(struct tracy_event* e) {
     pthread_mutex_lock(&output_lock);

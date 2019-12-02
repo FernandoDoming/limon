@@ -5,7 +5,9 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdio.h>
 #include <time.h>
+#include <linux/limits.h>
 
 #include "trace.h"
 #include "fsmon.h"
@@ -22,11 +24,13 @@ struct tracy* init_tracing(pid_t tracee_pid)
 {
     struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
     tracy_set_signal_hook(tracy, signal_hook);
-    tracy_set_hook(tracy, "write",  TRACY_ABI_NATIVE, hook_write);
-    tracy_set_hook(tracy, "open",  TRACY_ABI_NATIVE, hook_open);
-    tracy_set_hook(tracy, "openat",  TRACY_ABI_NATIVE, hook_openat);
-    tracy_set_hook(tracy, "clone",  TRACY_ABI_NATIVE, hook_clone);
-    tracy_set_hook(tracy, "execve", TRACY_ABI_NATIVE, hook_execve);
+
+    tracy_set_hook(tracy, "write",  get_tracy_abi_for_proc(tracee_pid), hook_write);
+    tracy_set_hook(tracy, "open",   get_tracy_abi_for_proc(tracee_pid), hook_open);
+    tracy_set_hook(tracy, "openat", get_tracy_abi_for_proc(tracee_pid), hook_openat);
+    tracy_set_hook(tracy, "clone",  get_tracy_abi_for_proc(tracee_pid), hook_clone);
+    tracy_set_hook(tracy, "execve", get_tracy_abi_for_proc(tracee_pid), hook_execve);
+
     tracy_set_default_hook(tracy, hook_syscall);
 
     TAILQ_INIT(&pid_head);
@@ -169,7 +173,7 @@ int hook_open(struct tracy_event* e)
         (fm.jsonStream || firstnode) ? "" : ",",
         time(NULL),
         e->child->pid,
-        get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
+        get_syscall_name_abi(e->syscall_num, get_tracy_abi_for_proc(e->child->pid)),
         e->syscall_num,
         e->args.return_code
     );
@@ -216,7 +220,7 @@ int hook_openat(struct tracy_event* e)
         (fm.jsonStream || firstnode) ? "" : ",",
         time(NULL),
         e->child->pid,
-        get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
+        get_syscall_name_abi(e->syscall_num, get_tracy_abi_for_proc(e->child->pid)),
         e->syscall_num,
         e->args.return_code
     );
@@ -262,7 +266,7 @@ int hook_write(struct tracy_event* e)
         (fm.jsonStream || firstnode) ? "" : ",",
         time(NULL),
         e->child->pid,
-        get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
+        get_syscall_name_abi(e->syscall_num, get_tracy_abi_for_proc(e->child->pid)),
         e->syscall_num,
         e->args.return_code
     );
@@ -303,7 +307,7 @@ int hook_execve(struct tracy_event* e) {
         (fm.jsonStream || firstnode) ? "" : ",",
         time(NULL),
         e->child->pid,
-        get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
+        get_syscall_name_abi(e->syscall_num, get_tracy_abi_for_proc(e->child->pid)),
         e->syscall_num,
         e->args.return_code
     );
@@ -404,6 +408,15 @@ size_t read_remote_string_array(
     return nread;
 }
 
+long get_tracy_abi_for_proc(pid_t pid)
+{
+#   ifdef __x86_64__
+    if (is_32bit_process(pid)) return TRACY_ABI_X86;
+#   endif
+
+    return TRACY_ABI_NATIVE;
+}
+
 void print_syscall(struct tracy_event* e)
 {
     /* Print a representation of the system call */
@@ -426,7 +439,7 @@ void print_syscall(struct tracy_event* e)
             (fm.jsonStream || firstnode) ? "" : ",",
             time(NULL),
             e->child->pid,
-            get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
+            get_syscall_name_abi(e->syscall_num, get_tracy_abi_for_proc(e->child->pid)),
             e->syscall_num,
             (long) e->args.a0, (long) e->args.a1, (long) e->args.a2,
             (long) e->args.a3, (long) e->args.a4, (long) e->args.a5,
@@ -435,7 +448,7 @@ void print_syscall(struct tracy_event* e)
     }
     else {
         fprintf(outfd, "%s(%ld, %ld, %ld, %ld, %ld, %ld) = %ld",
-            get_syscall_name_abi(e->syscall_num, TRACY_ABI_NATIVE),
+            get_syscall_name_abi(e->syscall_num, get_tracy_abi_for_proc(e->child->pid)),
             (long) e->args.a0, (long) e->args.a1, (long) e->args.a2,
             (long) e->args.a3, (long) e->args.a4, (long) e->args.a5,
             e->args.return_code

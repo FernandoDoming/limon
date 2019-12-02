@@ -17,6 +17,7 @@ void add_traced_proc(pid_t pid, pid_t ppid);
 bool is_traced_proc(pid_t pid);
 
 void print_syscall(struct tracy_event* e);
+long get_tracy_abi_for_proc(pid_t pid);
 
 size_t read_remote_string(
     struct tracy_event* e,

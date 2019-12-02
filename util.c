@@ -243,6 +243,32 @@ void print_scaped_string(FILE* outfd, char* str, size_t buflen)
     }
 }
 
+bool is_32bit_process(pid_t pid)
+{
+    char elfpath[PATH_MAX] = {};
+    snprintf(elfpath, PATH_MAX, "/proc/%d/exe", pid);
+
+    FILE* exefp = fopen(elfpath, "r");
+    if (exefp == NULL) return false;
+    // 5th bit indicates bitness
+    //fseek(exefp, 4, SEEK_SET);
+    //int bitness = fgetc(exefp);
+    // 1 - 32bit ; 2 - 64 bit
+    // https://unix.stackexchange.com/questions/106234/determine-if-a-specific-process-is-32-or-64-bit
+    //printf("Bitness read from PID %d: %d\n", pid, bitness);
+
+	// I known this is less efficient that the code above, but the code above is not reliable
+	// and I don't know why
+    int loops = 5;
+	int bitness;
+    while (loops--) {
+        bitness = fgetc(exefp);
+    }
+
+	fclose(exefp);
+    return bitness == 1;
+}
+
 void print_version()
 {
 	printf(

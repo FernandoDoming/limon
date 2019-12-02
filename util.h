@@ -14,6 +14,7 @@ void hexdump(const uint8_t *buf, unsigned int len, int w);
 const char * get_proc_name(int pid, int *ppid);
 bool is_directory (const char *str);
 bool copy_file(const char *src, const char *dst);
+bool is_32bit_process(pid_t pid);
 void print_scaped_string(FILE* outfd, char* str, size_t buflen);
 void print_version();
 

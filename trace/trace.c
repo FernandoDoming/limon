@@ -153,6 +153,24 @@ int hook_clone(struct tracy_event* e)
 {
     if (e->args.return_code > 0) {
         add_traced_proc(e->args.return_code, e->child->pid);
+
+        pthread_mutex_lock(&output_lock);
+        fprintf(
+            outfd,
+            "%s{\"event_type\":\"syscall\","
+            "\"timestamp\":%lu,"
+            "\"pid\":%d,"
+            "\"syscall_name\":\"%s\","
+            "\"syscall_n\":%ld,"
+            "\"return\":%ld}\n",
+            (fm.jsonStream || firstnode) ? "" : ",",
+            time(NULL),
+            e->child->pid,
+            get_syscall_name_abi(e->syscall_num, get_tracy_abi_for_proc(e->child->pid)),
+            e->syscall_num,
+            e->args.return_code
+        );
+        pthread_mutex_unlock(&output_lock);
     }
 
     return TRACY_HOOK_CONTINUE;

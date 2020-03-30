@@ -34,6 +34,7 @@ size_t read_remote_string_array(
 
 int signal_hook(struct tracy_event *e);
 int hook_syscall(struct tracy_event* e);
+int hook_ptrace(struct tracy_event* e);
 int hook_clone(struct tracy_event* e);
 int hook_open(struct tracy_event* e);
 int hook_openat(struct tracy_event* e);

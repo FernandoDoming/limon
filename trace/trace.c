@@ -18,6 +18,7 @@
 extern FILE* outfd;
 extern FileMonitor fm;
 extern bool firstnode;
+extern bool bypassanti;
 extern pthread_mutex_t output_lock;
 
 struct tracy* init_tracing(pid_t tracee_pid)
@@ -25,6 +26,7 @@ struct tracy* init_tracing(pid_t tracee_pid)
     struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
     tracy_set_signal_hook(tracy, signal_hook);
 
+    tracy_set_hook(tracy, "ptrace", get_tracy_abi_for_proc(tracee_pid), hook_ptrace);
     tracy_set_hook(tracy, "write",  get_tracy_abi_for_proc(tracee_pid), hook_write);
     tracy_set_hook(tracy, "open",   get_tracy_abi_for_proc(tracee_pid), hook_open);
     tracy_set_hook(tracy, "openat", get_tracy_abi_for_proc(tracee_pid), hook_openat);
@@ -144,6 +146,49 @@ int signal_hook(struct tracy_event *e) {
 int hook_syscall(struct tracy_event* e) {
     pthread_mutex_lock(&output_lock);
     print_syscall(e);
+    pthread_mutex_unlock(&output_lock);
+
+    return TRACY_HOOK_CONTINUE;
+}
+
+int hook_ptrace(struct tracy_event* e)
+{
+    if (e->child->pre_syscall) return TRACY_HOOK_CONTINUE;
+
+    pthread_mutex_lock(&output_lock);
+
+    fprintf(
+        outfd,
+        "%s{\"event_type\":\"syscall\","
+        "\"timestamp\":%lu,"
+        "\"pid\":%d,"
+        "\"syscall_name\":\"%s\","
+        "\"syscall_n\":%ld,"
+        "\"request\":%ld,"
+        "\"requested_pid\":%ld,"
+        "\"addr\":%ld,"
+        "\"data\":%ld,"
+        "\"return\":%ld,",
+        (fm.jsonStream || firstnode) ? "" : ",",
+        time(NULL),
+        e->child->pid,
+        get_syscall_name_abi(e->syscall_num, get_tracy_abi_for_proc(e->child->pid)),
+        e->syscall_num,
+        e->args.a0,
+        e->args.a1,
+        e->args.a2,
+        e->args.a3,
+        e->args.return_code
+    );
+
+    if (bypassanti &&
+        ((is_traced_proc(e->args.a1) && e->args.a0 == PTRACE_ATTACH) ||
+            e->args.a0 == PTRACE_TRACEME))
+    {
+        e->args.return_code = 0;
+        tracy_modify_syscall_regs(e->child, e->args.syscall, &e->args);
+    }
+
     pthread_mutex_unlock(&output_lock);
 
     return TRACY_HOOK_CONTINUE;

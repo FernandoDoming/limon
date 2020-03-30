@@ -18,6 +18,7 @@
 static bool colorful = true;
 static char* outfpath = NULL;
 
+bool bypassanti = false;
 bool firstnode = true;
 FileMonitor fm = {};
 FILE* outfd    = NULL;
@@ -33,6 +34,7 @@ FileMonitorBackend *backends[] = {
 
 static void help (const char *argv0) {
 	eprintf ("Usage: %s [options] [filemonitor/root/path]\n"
+		" -a                tamper certain syscalls to bypass known anti-debugging methods (MAY ALTER EXPECTED BEHAVIOUR)\n"
 		" -b [dir]          backup files to DIR folder (EXPERIMENTAL)\n"
 		" -B [name]         specify an alternative file system monitor backend\n"
 		" -f                show only filename (no path)\n"
@@ -244,8 +246,11 @@ int main (int argc, char **argv) {
 	fm.child    = true;
 
 	/* Cmdline option parsing */
-	while ((c = getopt (argc, argv, "hb:B:d:fjJo:Lne:p:P:v")) != -1) {
+	while ((c = getopt (argc, argv, "ahb:B:d:fjJo:Lne:p:P:v")) != -1) {
 		switch (c) {
+		case 'a':
+			bypassanti = true;
+			break;
 		case 'b':
 			fm.link = optarg;
 			break;

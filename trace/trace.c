@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 #include <linux/limits.h>
 
@@ -334,16 +335,25 @@ int hook_write(struct tracy_event* e)
         e->args.return_code
     );
 
+    char fdpath[PATH_MAX] = {};
+    char fd_symlink_path[PATH_MAX] = {};
+    snprintf(fd_symlink_path, PATH_MAX, "/proc/%d/fd/%ld", e->child->pid, e->args.a0);
+    if (realpath(fd_symlink_path, fdpath) == NULL) {
+        snprintf(fdpath, PATH_MAX, "RESOLV_ERROR");
+    }
+
     char buffer[BUFSIZE] = {};
     read_remote_string(e, (char*) e->args.a1, buffer, BUFSIZE);
 
     fprintf(
         outfd,
         "\"fd\":%ld,"
-        "\"buffer\":\"",
+        "\"filepath\":\"",
         e->args.a0
     );
+    print_scaped_string(outfd, fdpath, PATH_MAX);
 
+    fprintf(outfd, "\",\"buffer\":\"");
     print_scaped_string(outfd, buffer, BUFSIZE);
 
     fprintf(

@@ -247,14 +247,14 @@ int hook_open(struct tracy_event* e)
 
     fprintf(
         outfd,
-        "\"filename\":"
+        "\"filename\":\""
     );
 
     print_scaped_string(outfd, buffer, BUFSIZE);
 
     fprintf(
         outfd,
-        ","
+        "\","
     );
 
     fprintf(

@@ -22,6 +22,15 @@ extern bool firstnode;
 extern bool bypassanti;
 extern pthread_mutex_t output_lock;
 
+TAILQ_HEAD(argv_q, str_list_entry) argv_head;
+TAILQ_HEAD(pid_q, pid_entry) pid_head;
+
+size_t read_remote_string_array(
+    struct tracy_event* e,
+    char** rtable,
+    struct argv_q* argv_head
+);
+
 struct tracy* init_tracing(pid_t tracee_pid)
 {
     struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
@@ -47,7 +56,7 @@ void free_tracing(struct tracy* tracy)
     tracy_free(tracy);
 
     pid_entry* item = NULL;
-    while (item = TAILQ_FIRST(&pid_head)) {
+    while ( (item = (pid_entry*) TAILQ_FIRST(&pid_head)) != NULL ) {
         TAILQ_REMOVE(&pid_head, item, entries);
         free(item);
     }
@@ -101,7 +110,7 @@ void spawn_tracee_process(void* cmd)
 
     /* Split the cmd into the argv format */
     char** args = NULL;
-    args = (char*) calloc(parts + 1, sizeof(char*));
+    args = (char**) calloc(parts + 1, sizeof(char*));
     if (args == NULL) FATAL("Not enough resources");
 
     char* delimiter = strtok(cmd, " ");
@@ -429,7 +438,7 @@ int hook_execve(struct tracy_event* e) {
     fprintf(outfd, "}\n");
     pthread_mutex_unlock(&output_lock);
 
-    while (item = TAILQ_FIRST(&argv_head)) {
+    while ( (item = (str_list_entry*) TAILQ_FIRST(&argv_head)) != NULL ) {
         TAILQ_REMOVE(&argv_head, item, entries);
         free(item);
     }

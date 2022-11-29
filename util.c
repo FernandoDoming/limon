@@ -163,17 +163,17 @@ const char *get_proc_name(int pid, int *ppid) {
 }
 
 bool is_directory (const char *str) {
-        struct stat buf = {0};
-        if (!str || !*str) {
+		struct stat buf = {0};
+		if (!str || !*str) {
 		return false;
 	}
-        if (stat (str, &buf) == -1) {
+		if (stat (str, &buf) == -1) {
 		return false;
 	}
-        if ((S_IFBLK & buf.st_mode) == S_IFBLK) {
+		if ((S_IFBLK & buf.st_mode) == S_IFBLK) {
 		return false;
 	}
-        return S_IFDIR == (S_IFDIR & buf.st_mode);
+		return S_IFDIR == (S_IFDIR & buf.st_mode);
 }
 
 bool copy_file(const char *src, const char *dst) {
@@ -227,46 +227,46 @@ char *fmu_jsonfilter(const char *s) {
 
 void print_scaped_string(FILE* outfd, char* str, size_t buflen)
 {
-    if (str == NULL) return;
+	if (str == NULL) return;
 
-    setlocale(LC_ALL, "C");
+	setlocale(LC_ALL, "C");
 
-    char c = 0;
-    for(int i = 0 ; (c = *str) != '\0' && i < buflen ; i++, str++)
-    {
+	char c = 0;
+	for(int i = 0 ; (c = *str) != '\0' && i < buflen ; i++, str++)
+	{
 		if (is_printable(c)) {
 			fputc(c, outfd);
 		}
 		else {
 			fprintf(outfd, "\\x%02x", c);
 		}
-    }
+	}
 }
 
 bool is_32bit_process(pid_t pid)
 {
-    char elfpath[PATH_MAX] = {};
-    snprintf(elfpath, PATH_MAX, "/proc/%d/exe", pid);
+	char elfpath[PATH_MAX] = {};
+	snprintf(elfpath, PATH_MAX, "/proc/%d/exe", pid);
 
-    FILE* exefp = fopen(elfpath, "r");
-    if (exefp == NULL) return false;
-    // 5th bit indicates bitness
-    //fseek(exefp, 4, SEEK_SET);
-    //int bitness = fgetc(exefp);
-    // 1 - 32bit ; 2 - 64 bit
-    // https://unix.stackexchange.com/questions/106234/determine-if-a-specific-process-is-32-or-64-bit
-    //printf("Bitness read from PID %d: %d\n", pid, bitness);
+	FILE* exefp = fopen(elfpath, "r");
+	if (exefp == NULL) return false;
+	// 5th bit indicates bitness
+	//fseek(exefp, 4, SEEK_SET);
+	//int bitness = fgetc(exefp);
+	// 1 - 32bit ; 2 - 64 bit
+	// https://unix.stackexchange.com/questions/106234/determine-if-a-specific-process-is-32-or-64-bit
+	//printf("Bitness read from PID %d: %d\n", pid, bitness);
 
 	// I known this is less efficient that the code above, but the code above is not reliable
 	// and I don't know why
-    int loops = 5;
+	int loops = 5;
 	int bitness;
-    while (loops--) {
-        bitness = fgetc(exefp);
-    }
+	while (loops--) {
+		bitness = fgetc(exefp);
+	}
 
 	fclose(exefp);
-    return bitness == 1;
+	return bitness == 1;
 }
 
 void print_version()

@@ -34,6 +34,8 @@ FileMonitorBackend *backends[] = {
 };
 
 static void help (const char *argv0) {
+	print_version();
+	printf("\n");
 	eprintf ("Usage: %s [options] [filemonitor/root/path]\n"
 		" -a                tamper certain syscalls to bypass known anti-debugging methods (MAY ALTER EXPECTED BEHAVIOUR)\n"
 		" -b [dir]          backup files to DIR folder (EXPERIMENTAL)\n"

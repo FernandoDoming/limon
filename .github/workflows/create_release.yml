@@ -1,14 +1,11 @@
-name: Build
+name: Create release
 on:
   push:
-    branches:
-      - master
-  pull_request:
+    tags: '*'
 
 jobs:
-  build:
+  build_and_release:
     name: Build on ${{ matrix.distro }} ${{ matrix.arch }}
-    if: contains(github.ref, 'master') || contains(github.ref, 'ci-')
     runs-on: ubuntu-latest
 
     strategy:
@@ -56,3 +53,10 @@ jobs:
         with:
           name: limon binaries
           path: artifacts/*
+
+      - name: Create release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/*

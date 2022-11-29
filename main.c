@@ -23,6 +23,7 @@ bool firstnode = true;
 FileMonitor fm = {};
 FILE* outfd    = NULL;
 pthread_mutex_t output_lock = {};
+char* dumppath = NULL;
 
 FileMonitorBackend *backends[] = {
 	&fmb_inotify,
@@ -47,6 +48,7 @@ static void help (const char *argv0) {
 		" -e [path/to/bin]  execute and monitor this binary\n"
 		" -p PID            monitor this PID\n"
 		" -v                show version\n"
+		" -d [dir]          dump process memory on exit in the directory specified by DIR\n"
 		" [path]            only get events from this path\n"
 		, argv0);
 }
@@ -241,12 +243,12 @@ static void list_backends() {
 
 int main (int argc, char **argv) {
 	int c, ret = 0;
-	char* binpath = NULL;
+	char* binpath  = NULL;
 	fm.backend  = fmb_fanotify;
 	fm.child    = true;
 
 	/* Cmdline option parsing */
-	while ((c = getopt (argc, argv, "ahb:B:d:fjJo:Lne:p:P:v")) != -1) {
+	while ((c = getopt (argc, argv, "ahb:B:d:fjJo:Lne:d:p:P:v")) != -1) {
 		switch (c) {
 		case 'a':
 			bypassanti = true;
@@ -257,6 +259,16 @@ int main (int argc, char **argv) {
 		case 'B':
 			use_backend(optarg);
 			break;
+		case 'd':
+		{
+			size_t pathlen = strnlen(optarg, FILENAME_MAX) + 1;
+			dumppath = (char*) malloc(pathlen * sizeof(char));
+			if (!dumppath) {
+				FATAL("Could not allocate dumppath buffer!\n");
+			}
+			strncpy(dumppath, optarg, pathlen - 1);
+			break;
+		}
 		case 'h':
 			help(argv[0]);
 			return 0;
@@ -358,7 +370,6 @@ int main (int argc, char **argv) {
 		struct tracy* tracy = init_tracing(child_pid);
 		tracy_attach(tracy, child_pid);
 		tracy_main(tracy);			// Blocking syscall loop
-
 		free_tracing(tracy);
 	}
 
@@ -372,8 +383,9 @@ int main (int argc, char **argv) {
 	fclose(outfd);
 	fm.running = false;
 	fm.backend.end(&fm);
-	if (outfpath) free(outfpath);
-	if (binpath)  free(binpath);
+	free(outfpath);
+	free(binpath);
+	free(dumppath);
 
 	return ret;
 }

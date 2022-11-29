@@ -15,12 +15,14 @@
 #include "util.h"
 #include "macro.h"
 #include "types.h"
+#include "dump.h"
 
 extern FILE* outfd;
 extern FileMonitor fm;
 extern bool firstnode;
 extern bool bypassanti;
 extern pthread_mutex_t output_lock;
+extern char* dumppath;
 
 TAILQ_HEAD(argv_q, str_list_entry) argv_head;
 TAILQ_HEAD(pid_q, pid_entry) pid_head;
@@ -36,12 +38,14 @@ struct tracy* init_tracing(pid_t tracee_pid)
     struct tracy* tracy = tracy_init(TRACY_TRACE_CHILDREN);
     tracy_set_signal_hook(tracy, signal_hook);
 
-    tracy_set_hook(tracy, "ptrace", get_tracy_abi_for_proc(tracee_pid), hook_ptrace);
-    tracy_set_hook(tracy, "write",  get_tracy_abi_for_proc(tracee_pid), hook_write);
-    tracy_set_hook(tracy, "open",   get_tracy_abi_for_proc(tracee_pid), hook_open);
-    tracy_set_hook(tracy, "openat", get_tracy_abi_for_proc(tracee_pid), hook_openat);
-    tracy_set_hook(tracy, "clone",  get_tracy_abi_for_proc(tracee_pid), hook_clone);
-    tracy_set_hook(tracy, "execve", get_tracy_abi_for_proc(tracee_pid), hook_execve);
+    tracy_set_hook(tracy, "ptrace",     get_tracy_abi_for_proc(tracee_pid), hook_ptrace);
+    tracy_set_hook(tracy, "write",      get_tracy_abi_for_proc(tracee_pid), hook_write);
+    tracy_set_hook(tracy, "open",       get_tracy_abi_for_proc(tracee_pid), hook_open);
+    tracy_set_hook(tracy, "openat",     get_tracy_abi_for_proc(tracee_pid), hook_openat);
+    tracy_set_hook(tracy, "clone",      get_tracy_abi_for_proc(tracee_pid), hook_clone);
+    tracy_set_hook(tracy, "execve",     get_tracy_abi_for_proc(tracee_pid), hook_execve);
+    tracy_set_hook(tracy, "exit",       get_tracy_abi_for_proc(tracee_pid), hook_exit);
+    tracy_set_hook(tracy, "exit_group", get_tracy_abi_for_proc(tracee_pid), hook_exit_group);
 
     tracy_set_default_hook(tracy, hook_syscall);
 
@@ -442,6 +446,54 @@ int hook_execve(struct tracy_event* e) {
         TAILQ_REMOVE(&argv_head, item, entries);
         free(item);
     }
+
+    return TRACY_HOOK_CONTINUE;
+}
+
+int hook_exit(struct tracy_event* e) {
+    pthread_mutex_lock(&output_lock);
+    fprintf(
+        outfd,
+        "%s{\"event_type\":\"syscall\","
+        "\"timestamp\":%lu,"
+        "\"pid\":%d,"
+        "\"syscall_name\":\"%s\","
+        "\"syscall_n\":%ld,"
+        "\"return\":%ld}",
+        (fm.jsonStream || firstnode) ? "" : ",",
+        time(NULL),
+        e->child->pid,
+        get_syscall_name_abi(e->syscall_num, get_tracy_abi_for_proc(e->child->pid)),
+        e->syscall_num,
+        e->args.return_code
+    );
+    pthread_mutex_unlock(&output_lock);
+
+    if (dumppath) dump_pid(e->child->pid, dumppath);
+
+    return TRACY_HOOK_CONTINUE;
+}
+
+int hook_exit_group(struct tracy_event* e) {
+    pthread_mutex_lock(&output_lock);
+    fprintf(
+        outfd,
+        "%s{\"event_type\":\"syscall\","
+        "\"timestamp\":%lu,"
+        "\"pid\":%d,"
+        "\"syscall_name\":\"%s\","
+        "\"syscall_n\":%ld,"
+        "\"return\":%ld}",
+        (fm.jsonStream || firstnode) ? "" : ",",
+        time(NULL),
+        e->child->pid,
+        get_syscall_name_abi(e->syscall_num, get_tracy_abi_for_proc(e->child->pid)),
+        e->syscall_num,
+        e->args.return_code
+    );
+    pthread_mutex_unlock(&output_lock);
+
+    if (dumppath) dump_pid(e->child->pid, dumppath);
 
     return TRACY_HOOK_CONTINUE;
 }

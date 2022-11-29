@@ -31,3 +31,5 @@ int hook_open(struct tracy_event* e);
 int hook_openat(struct tracy_event* e);
 int hook_write(struct tracy_event* e);
 int hook_execve(struct tracy_event* e);
+int hook_exit(struct tracy_event* e);
+int hook_exit_group(struct tracy_event* e);

@@ -5,13 +5,14 @@ CFLAGS+=-I.
 CFLAGS+=-Wall
 
 CFLAGS+=-DLIMON_VERSION=\"$(VERSION)\"
-CFLAGS+=-Icommon/ -Itrace/ -I$(TRACYDIR) -g
+CFLAGS+=-Icommon/ -Itrace/ -Idump/ -I$(TRACYDIR) -g
 
 LDFLAGS+=-pthread
 
 SOURCES=main.c util.c
 SOURCES+=backend/*.c
 SOURCES+=trace/*.c
+SOURCES+=dump/*.c
 SOURCES+=lib/libtracy.a
 
 # LINUX
